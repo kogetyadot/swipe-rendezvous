@@ -249,7 +249,13 @@ async function run() {
     });
 
     await mPortPage.goto(URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await mPortPage.waitForTimeout(700);
+    await mPortPage.waitForTimeout(900);
+    await mPortPage.screenshot({ path: path.join(OUT_DIR, '09a_mobile_portrait_title.png') });
+    await mPortPage.click('#btn-how-to-play');
+    await mPortPage.waitForTimeout(350);
+    await mPortPage.screenshot({ path: path.join(OUT_DIR, '09b_mobile_portrait_howto.png') });
+    await mPortPage.click('#btn-howto-ok');
+    await mPortPage.waitForTimeout(250);
     await mPortPage.click('#btn-start-game');
     await mPortPage.waitForTimeout(500);
     await mPortPage.click('#btn-swipe-right');

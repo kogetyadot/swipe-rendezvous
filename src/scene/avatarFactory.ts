@@ -533,7 +533,7 @@ function buildRevealProp(propType: RevealPropType, appearance: VisualAppearance)
 
   switch (propType) {
     case 'cafe_map_open': {
-      const tex = createLabelTexture('cafe_map', '#fff8e7', '#2fb879', 'CAFE MAP', 'すぐ近く♥', '#1b5e3c');
+      const tex = createLabelTexture('cafe_map', '#fff8e7', '#2fb879', 'CAFE MAP', 'すぐ近く!', '#1b5e3c');
       const board = createSignPanel(0.82, 0.56, tex, '#2fb879');
       board.position.set(0.35, 1.32, 0.45);
       group.add(board);

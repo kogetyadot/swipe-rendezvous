@@ -1,5 +1,6 @@
 import { CharacterProfile } from '../types';
 import { portraitStudio } from './portraitStudio';
+import { ICONS } from './icons';
 
 export interface MatchingAppCallbacks {
   onSwipeRight: (character: CharacterProfile) => void;
@@ -40,32 +41,33 @@ export class MatchingAppUI {
       <div class="phone-frame" id="matching-phone-frame">
         <div class="app-header">
           <div class="app-brand">
-            <span class="app-brand-icon">💘</span>
+            <span class="app-brand-mark">${ICONS.heart('ico-brand')}</span>
             <span class="app-brand-title">PairWalk</span>
-            <span class="app-brand-sub">即会いマッチング</span>
+            <span class="app-brand-sub">即会いマッチ</span>
           </div>
           <div class="app-stats-pills">
             <span class="app-pill" id="app-match-count" title="右画面へ送り出した人数">待ち合わせ 0人</span>
-            <span class="app-pill app-pill-muted" id="app-deck-count">候補 --</span>
+            <span class="app-pill app-pill-muted" id="app-deck-count">No.1</span>
           </div>
         </div>
 
         <div class="app-nudge-banner" id="app-nudge-banner">
-          👉 右スワイプで即・右の歩道に登場！プロフィールから当たりを予想しよう
+          <span class="nudge-ico">${ICONS.swipeIcon('ico-inline')}</span>
+          <span class="nudge-text">右スワイプで即・歩道奥に登場！</span>
         </div>
 
         <div class="card-stage" id="card-stage"></div>
 
         <div class="card-actions">
           <button type="button" class="btn-swipe btn-nope" id="btn-swipe-left" aria-label="会わない（左スワイプ）">
-            <span class="btn-swipe-icon">✕</span>
+            <span class="btn-swipe-icon">${ICONS.cross('ico-btn')}</span>
             <span class="btn-swipe-text">会わない</span>
             <span class="btn-swipe-sub">左スワイプ</span>
           </button>
           <button type="button" class="btn-swipe btn-like" id="btn-swipe-right" aria-label="会う（右スワイプ）">
-            <span class="btn-swipe-icon">💚</span>
+            <span class="btn-swipe-icon">${ICONS.heart('ico-btn')}</span>
             <span class="btn-swipe-text">会う！</span>
-            <span class="btn-swipe-sub">右スワイプで歩道へ</span>
+            <span class="btn-swipe-sub">右スワイプ</span>
           </button>
         </div>
       </div>
@@ -141,7 +143,6 @@ export class MatchingAppUI {
       } else if (this.currentDx <= -threshold) {
         this.triggerSwipe('left');
       } else {
-        // Snap back smoothly
         this.activeCardEl.style.transition = 'transform 0.22s cubic-bezier(0.2, 0.9, 0.3, 1)';
         this.activeCardEl.style.transform = 'translate3d(0px, 0px, 0) rotate(0deg)';
         const likeStamp = this.activeCardEl.querySelector('.stamp-like') as HTMLElement | null;
@@ -207,7 +208,8 @@ export class MatchingAppUI {
 
   public setNudgeHighlight(active: boolean, text?: string): void {
     if (text) {
-      this.pulseBannerEl.textContent = text;
+      const span = this.pulseBannerEl.querySelector('.nudge-text');
+      if (span) span.textContent = text;
     }
     this.pulseBannerEl.classList.toggle('nudge-active', active);
   }
@@ -263,9 +265,7 @@ export class MatchingAppUI {
 
   private updateCounters(): void {
     this.matchCountEl.textContent = `待ち合わせ ${this.totalSwipedRight}人`;
-    const remaining = Math.max(1, this.deck.length - (this.currentIndex % this.deck.length));
-    this.deckCountEl.textContent = `候補 #${(this.currentIndex % this.deck.length) + 1}`;
-    void remaining;
+    this.deckCountEl.textContent = `No.${(this.currentIndex % this.deck.length) + 1}`;
   }
 
   private renderCards(): void {
@@ -299,10 +299,10 @@ export class MatchingAppUI {
     el.innerHTML = `
       <div class="card-photo-wrap">
         <img class="card-photo" src="${portraitUrl}" alt="${this.escapeHtml(character.name)}" draggable="false" />
-        <div class="swipe-stamp stamp-like">会う！💚</div>
-        <div class="swipe-stamp stamp-nope">見送る ✕</div>
+        <div class="swipe-stamp stamp-like">${ICONS.heart('ico-stamp')}<span>会う！</span></div>
+        <div class="swipe-stamp stamp-nope">${ICONS.cross('ico-stamp')}<span>見送る</span></div>
         <div class="card-spot-hint" title="右画面の3D歩道で見分ける目印">
-          <span class="spot-hint-icon">👀 目印:</span>
+          <span class="spot-hint-icon">${ICONS.eye('ico-inline')}<span>目印</span></span>
           <span class="spot-hint-text">${this.escapeHtml(character.spotHint)}</span>
         </div>
       </div>

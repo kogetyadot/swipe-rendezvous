@@ -15,29 +15,29 @@ const PHOTO_THEMES: PhotoTheme[] = [
 ];
 
 const THEME_BADGE_LABELS: Record<PhotoTheme, string> = {
-  cafe: '☕ CAFE SNAP',
-  park: '🌿 PARK WALK',
-  lounge: '🍸 LOUNGE',
-  street: '🏙️ CITY SNAP',
-  night: '🌙 NIGHT VIEW',
-  library: '📚 BOOK & CAFE',
+  cafe: 'CAFE SNAP',
+  park: 'PARK WALK',
+  lounge: 'LOUNGE',
+  street: 'CITY SNAP',
+  night: 'NIGHT VIEW',
+  library: 'BOOK & CAFE',
 };
 
 const PROP_BADGE_LABELS: Record<InitialPropType, string> = {
-  coffee: '☕ カフェラテ',
-  book: '📖 愛読書',
-  phone: '📱 スマホ',
-  camera: '📷 一眼カメラ',
-  bag: '👜 お気に入り鞄',
-  bouquet: '💐 花束',
-  map: '🗺️ 街歩きマップ',
-  umbrella: '☂️ 傘',
-  briefcase: '💼 ビジネス鞄',
-  cake_box: '🍰 ケーキ箱',
-  soccer_ball: '⚽ サッカーボール',
-  art_frame: '🖼️ アート額縁',
+  coffee: 'カフェラテ',
+  book: '愛読書',
+  phone: 'スマホ',
+  camera: '一眼カメラ',
+  bag: 'お気に入り鞄',
+  bouquet: '花束',
+  map: '街歩きマップ',
+  umbrella: '傘',
+  briefcase: 'ビジネス鞄',
+  cake_box: 'ケーキ箱',
+  soccer_ball: 'サッカーボール',
+  art_frame: 'アート額縁',
   watch: '⌚ 高級腕時計',
-  jewelry_box: '💎 宝石ケース',
+  jewelry_box: '宝石ケース',
 };
 
 export class PortraitStudio {

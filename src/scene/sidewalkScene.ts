@@ -116,6 +116,28 @@ export class SidewalkScene {
   private pedestrians: ActivePedestrian[] = [];
   private particles: BurstParticle[] = [];
 
+  private demoPool: CharacterProfile[] = [];
+  private demoActors: Array<{
+    rig: AvatarRig;
+    x: number;
+    z: number;
+    speedZ: number;
+    isMatch: boolean;
+    revealed: boolean;
+    elapsed: number;
+    revealZ: number;
+    animState: 'walk' | 'wave' | 'chase' | 'panic';
+  }> = [];
+  private demoSpawnTimer = 0.2;
+  private demoCursor = 0;
+
+  private ambientLeaves: Array<{
+    mesh: THREE.Mesh;
+    vy: number;
+    vx: number;
+    phase: number;
+  }> = [];
+
   private pedestrianSpawnTimer = 0.8;
   private pedestrianSeed = 1;
   private totalElapsed = 0;
@@ -128,7 +150,7 @@ export class SidewalkScene {
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color('#ff8c61');
-    this.scene.fog = new THREE.FogExp2('#ff8a65', 0.0145);
+    this.scene.fog = new THREE.FogExp2('#ff8a65', 0.0135);
 
     const width = Math.max(1, container.clientWidth || window.innerWidth);
     const height = Math.max(1, container.clientHeight || window.innerHeight);
@@ -146,7 +168,7 @@ export class SidewalkScene {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.1;
+    this.renderer.toneMappingExposure = 1.12;
 
     container.innerHTML = '';
     container.appendChild(this.renderer.domElement);
@@ -154,10 +176,96 @@ export class SidewalkScene {
     this.setupLighting();
     this.buildSkyBackdrop();
     this.buildScrollingAvenue();
+    this.buildAmbientLeaves();
 
     this.protagonist = createProtagonistRig();
     this.protagonist.root.position.set(0, 0, PROTAGONIST_Z);
     this.scene.add(this.protagonist.root);
+  }
+
+  private buildAmbientLeaves(): void {
+    const colors = ['#ffd166', '#ff9f1c', '#ff6b8b', '#ffe699'];
+    const geom = new THREE.PlaneGeometry(0.18, 0.12);
+    for (let i = 0; i < 32; i++) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: colors[i % colors.length],
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.85,
+      });
+      const mesh = new THREE.Mesh(geom, mat);
+      mesh.position.set(
+        (Math.random() - 0.5) * 11,
+        1.2 + Math.random() * 5.2,
+        -42 + Math.random() * 48
+      );
+      mesh.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
+      this.scene.add(mesh);
+      this.ambientLeaves.push({
+        mesh,
+        vy: 0.45 + Math.random() * 0.55,
+        vx: (Math.random() - 0.5) * 0.7,
+        phase: Math.random() * Math.PI * 2,
+      });
+    }
+  }
+
+  public setDemoCharacters(characters: CharacterProfile[]): void {
+    this.demoPool = characters.slice();
+    if (this.demoActors.length === 0 && this.demoPool.length > 0) {
+      // Pre-populate lively sidewalk cast immediately so frame 1 of Title Screen is alive!
+      const presetZ = [-10, -18, -26, -34, -41];
+      const presetX = [-2.3, 1.9, -1.6, 2.5, -0.4];
+      for (let i = 0; i < presetZ.length; i++) {
+        this.spawnDemoActor(presetZ[i], presetX[i], i % 2 === 0 || i === 1);
+      }
+    }
+  }
+
+  private spawnDemoActor(spawnZ = -45, forcedX?: number, forceMatch?: boolean): void {
+    const isMatch =
+      forceMatch !== undefined ? forceMatch : this.demoPool.length > 0 && this.demoCursor % 3 !== 2;
+    const x = forcedX !== undefined ? forcedX : (Math.random() * 2 - 1) * 3.1;
+    let rig: AvatarRig;
+    let animState: 'walk' | 'wave' | 'chase' | 'panic' = 'walk';
+    if (isMatch && this.demoPool.length > 0) {
+      const profile = this.demoPool[this.demoCursor % this.demoPool.length];
+      this.demoCursor++;
+      rig = createCharacterRig(profile);
+      animState =
+        profile.category === 'good'
+          ? 'wave'
+          : profile.category === 'scam'
+            ? 'chase'
+            : 'panic';
+    } else {
+      this.demoCursor++;
+      rig = createPedestrianRig(this.pedestrianSeed++);
+    }
+    const revealed = isMatch && spawnZ > -22;
+    if (revealed) {
+      rig.revealPropGroup.visible = true;
+    }
+    rig.root.position.set(x, 0, spawnZ);
+    this.scene.add(rig.root);
+    this.demoActors.push({
+      rig,
+      x,
+      z: spawnZ,
+      speedZ: isMatch ? 6.8 + Math.random() * 1.6 : 6.0 + Math.random() * 1.4,
+      isMatch,
+      revealed,
+      elapsed: Math.random() * 6,
+      revealZ: -22 + (Math.random() - 0.5) * 4,
+      animState,
+    });
+  }
+
+  private clearDemoActors(): void {
+    for (const d of this.demoActors) {
+      this.scene.remove(d.rig.root);
+    }
+    this.demoActors = [];
   }
 
   private setupLighting(): void {
@@ -393,6 +501,7 @@ export class SidewalkScene {
   }
 
   public reset(): void {
+    this.clearDemoActors();
     for (const m of this.activeMatches) {
       this.scene.remove(m.rig.root);
     }
@@ -785,17 +894,76 @@ export class SidewalkScene {
       }
     }
 
-    // Idle preview mode (Title / Result modals): scroll street & walk protagonist calmly without collisions or shake
+    // 1b. Drift golden sunset leaves across the avenue
+    for (const leaf of this.ambientLeaves) {
+      leaf.mesh.position.y -= leaf.vy * clampedDt;
+      leaf.mesh.position.x +=
+        (leaf.vx + Math.sin(this.totalElapsed * 2.1 + leaf.phase) * 0.55) * clampedDt;
+      leaf.mesh.position.z += scrollSpeed * 0.55 * clampedDt;
+      leaf.mesh.rotation.x += 1.6 * clampedDt;
+      leaf.mesh.rotation.y += 2.1 * clampedDt;
+      if (leaf.mesh.position.y < 0.1 || leaf.mesh.position.z > 8) {
+        leaf.mesh.position.set(
+          (Math.random() - 0.5) * 10.5,
+          4.2 + Math.random() * 2.6,
+          -42 + Math.random() * 34
+        );
+      }
+    }
+
+    // Live Title / Result Demo mode: bustling colorful avenue with animated cast & cinematic breathing camera
     if (isIdlePreview) {
+      this.demoSpawnTimer -= clampedDt;
+      if (this.demoSpawnTimer <= 0 && this.demoActors.length < 9) {
+        this.spawnDemoActor(-46);
+        this.demoSpawnTimer = 1.05;
+      }
+
+      // Protagonist weaves gracefully down the avenue avoiding demo actors
+      const demoTargetX = Math.sin(this.totalElapsed * 0.85) * 1.45;
+      const prevDemoX = this.playerX;
+      this.playerX += (demoTargetX - this.playerX) * Math.min(1, clampedDt * 2.8);
+      const demoVx = clampedDt > 0 ? (this.playerX - prevDemoX) / clampedDt : 0;
+
       this.protagonist.root.position.set(this.playerX, 0, PROTAGONIST_Z);
-      this.protagonist.root.rotation.set(0, Math.PI, 0);
-      animateAvatarWalk(this.protagonist, this.totalElapsed, scrollSpeed, 'walk');
+      this.protagonist.root.rotation.y =
+        Math.PI - THREE.MathUtils.clamp(demoVx * 0.05, -0.24, 0.24);
+      this.protagonist.root.rotation.z = -THREE.MathUtils.clamp(demoVx * 0.025, -0.1, 0.1);
+      animateAvatarWalk(this.protagonist, this.totalElapsed, scrollSpeed * 1.05, 'walk');
+
+      for (let i = this.demoActors.length - 1; i >= 0; i--) {
+        const d = this.demoActors[i];
+        d.elapsed += clampedDt;
+        d.z += d.speedZ * clampedDt;
+        if (d.isMatch && !d.revealed && d.z > d.revealZ) {
+          d.revealed = true;
+          d.rig.revealPropGroup.visible = true;
+        }
+        // Gently sidestep protagonist so demo actors never clip through
+        if (d.z > -6 && d.z < 2 && Math.abs(d.x - this.playerX) < 1.15) {
+          d.x += (d.x >= this.playerX ? 1 : -1) * 1.8 * clampedDt;
+        }
+        d.rig.root.position.set(d.x, 0, d.z);
+        animateAvatarWalk(
+          d.rig,
+          d.elapsed,
+          d.speedZ,
+          d.isMatch && d.revealed ? d.animState : 'walk'
+        );
+        if (d.z > 6) {
+          this.scene.remove(d.rig.root);
+          this.demoActors.splice(i, 1);
+        }
+      }
+
+      const camSwayX = Math.sin(this.totalElapsed * 0.45) * 0.85;
+      const camSwayY = Math.sin(this.totalElapsed * 0.7) * 0.14;
       this.camera.position.set(
-        this.playerX * 0.25,
-        this.baseCameraPos.y,
-        this.baseCameraPos.z
+        this.playerX * 0.22 + camSwayX,
+        this.baseCameraPos.y - 0.15 + camSwayY,
+        this.baseCameraPos.z - 0.35
       );
-      this.camera.lookAt(this.playerX * 0.12, this.cameraLookTarget.y, this.cameraLookTarget.z);
+      this.camera.lookAt(camSwayX * 0.35, 1.35, -13);
       return [];
     }
 

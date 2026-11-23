@@ -6,11 +6,12 @@ import {
   DifficultyId,
   EncounterRecord,
 } from '../types';
-import { DIFFICULTY_CONFIGS, buildShuffledDeck } from '../data/characters';
+import { CHARACTERS, DIFFICULTY_CONFIGS, buildShuffledDeck } from '../data/characters';
 import { soundEngine } from '../audio/soundEngine';
 import { portraitStudio } from '../ui/portraitStudio';
 import { MatchingAppUI } from '../ui/matchingAppUI';
 import { SidewalkScene } from '../scene/sidewalkScene';
+import { ICONS } from '../ui/icons';
 
 const BEST_SCORE_KEY_PREFIX = 'sr_best_score_';
 
@@ -56,8 +57,11 @@ export class GameController {
   private overheadLayerEl!: HTMLElement;
   private streetQueueEl!: HTMLElement;
   private toastLayerEl!: HTMLElement;
+  private popLayerEl!: HTMLElement;
+  private impactFlashEl!: HTMLElement;
   private steerThumbEl!: HTMLElement;
-  private titleModalEl!: HTMLElement;
+  private titleScreenEl!: HTMLElement;
+  private howtoModalEl!: HTMLElement;
   private resultModalEl!: HTMLElement;
   private hudBgmBtn!: HTMLButtonElement;
   private hudSeBtn!: HTMLButtonElement;
@@ -67,32 +71,68 @@ export class GameController {
 
   constructor(rootEl: HTMLElement) {
     this.rootEl = rootEl;
+    this.rootEl.classList.add('mode-title');
     this.buildShellDOM();
     this.initSubsystems();
     this.bindGlobalControls();
     this.updateAudioButtonsUI();
     this.refreshTitleBestScore();
 
-    // Start render loop
-    requestAnimationFrame((now) => this.loop(now));
+    // Ensure WebGL canvas fills full screen on title mode
+    requestAnimationFrame(() => {
+      this.sidewalkScene.resize();
+      requestAnimationFrame((now) => this.loop(now));
+    });
+  }
+
+  private buildTitleLogoSVG(): string {
+    return `
+      <div class="title-logo-stage">
+        <div class="logo-float-card logo-card-left" aria-hidden="true">
+          <div class="logo-card-photo"></div>
+          <div class="logo-card-bar"></div>
+          <div class="logo-card-stamp-nope">${ICONS.cross('ico-mini')}</div>
+        </div>
+        <div class="logo-float-card logo-card-right" aria-hidden="true">
+          <div class="logo-card-photo"></div>
+          <div class="logo-card-bar"></div>
+          <div class="logo-card-stamp-like">${ICONS.heart('ico-mini')}</div>
+        </div>
+        <div class="logo-wordmark">
+          <div class="logo-line logo-line-top">
+            <span class="lc lc-1">ス</span><span class="lc lc-2">ワ</span><span class="lc lc-3">イ</span><span class="lc lc-4">プ</span><span class="lc lc-dot">・</span>
+          </div>
+          <div class="logo-line logo-line-bottom">
+            <span class="lc lc-5">ラ</span><span class="lc lc-6">ン</span><span class="lc lc-7">デ</span><span class="lc lc-8">ブ</span><span class="lc lc-9">ー</span><span class="lc lc-bang">！</span>
+          </div>
+        </div>
+        <div class="logo-eng-pill">SWIPE RENDEZVOUS</div>
+      </div>
+    `;
   }
 
   private buildShellDOM(): void {
     this.rootEl.innerHTML = `
       <header class="top-hud" id="top-hud">
         <div class="hud-left">
-          <div class="hud-logo">💘 スワイプ・ランデブー！</div>
+          <div class="hud-brand-pill">
+            <span class="hud-brand-ico">${ICONS.heart('ico-inline')}</span>
+            <span class="hud-logo">スワイプ・ランデブー！</span>
+          </div>
           <span class="hud-diff-badge" id="hud-diff-badge">ふつう</span>
           <div class="hud-score-box">
             <span class="hud-score-label">SCORE</span>
             <span class="hud-score-value" id="hud-score-val">0</span>
           </div>
-          <div class="hud-combo" id="hud-combo-badge">誠実コンボ x1.0</div>
+          <div class="hud-combo" id="hud-combo-badge">
+            <span class="combo-ico">${ICONS.flame('ico-inline')}</span>
+            <span class="combo-txt">x1.0</span>
+          </div>
         </div>
 
         <div class="hud-center" id="hud-timer-wrap">
           <div class="hud-timer-top">
-            <span class="hud-timer-label" id="hud-timer-label">残り時間</span>
+            <span class="hud-timer-label" id="hud-timer-label">TIME</span>
             <span class="hud-timer-val" id="hud-timer-val">75.0s</span>
           </div>
           <div class="hud-timer-track">
@@ -101,12 +141,18 @@ export class GameController {
         </div>
 
         <div class="hud-right">
-          <div class="hud-street-count" id="hud-street-count" title="現在3D歩道を歩いてきているマッチング人数">
-            🚶 歩道接近中: <strong>0</strong>人
+          <div class="hud-street-count" id="hud-street-count" title="現在3D歩道を接近中の人数">
+            ${ICONS.runner('ico-inline')}<span>接近</span><strong>0</strong>
           </div>
-          <button type="button" class="hud-icon-btn" id="hud-btn-bgm" title="BGM オン/オフ">🎵 BGM</button>
-          <button type="button" class="hud-icon-btn" id="hud-btn-se" title="効果音 オン/オフ">🔊 SE</button>
-          <button type="button" class="hud-icon-btn hud-btn-title" id="hud-btn-menu" title="タイトル画面へ戻る">🏠 タイトル</button>
+          <button type="button" class="hud-icon-btn" id="hud-btn-bgm" title="BGM オン/オフ">
+            <span class="hud-btn-ico">${ICONS.music('ico-inline')}</span><span class="hud-btn-lbl">BGM</span>
+          </button>
+          <button type="button" class="hud-icon-btn" id="hud-btn-se" title="効果音 オン/オフ">
+            <span class="hud-btn-ico">${ICONS.sound('ico-inline')}</span><span class="hud-btn-lbl">SE</span>
+          </button>
+          <button type="button" class="hud-icon-btn hud-btn-title" id="hud-btn-menu" title="タイトル画面へ戻る">
+            <span class="hud-btn-ico">${ICONS.home('ico-inline')}</span><span class="hud-btn-lbl">タイトル</span>
+          </button>
         </div>
       </header>
 
@@ -115,95 +161,114 @@ export class GameController {
 
         <section class="right-pane" id="right-pane" aria-label="3D歩道アクション画面">
           <div class="three-container" id="three-container"></div>
+          <div class="impact-flash" id="impact-flash"></div>
           <div class="street-queue-strip" id="street-queue-strip"></div>
           <div class="overhead-layer" id="overhead-layer"></div>
+          <div class="score-pop-layer" id="score-pop-layer"></div>
           <div class="contact-toast-layer" id="contact-toast-layer"></div>
 
           <div class="steering-hud" id="steering-touch-zone">
-            <button type="button" class="steer-edge-btn" id="btn-steer-left" aria-label="左へ移動">◀ A / ←</button>
+            <button type="button" class="steer-edge-btn" id="btn-steer-left" aria-label="左へ移動">
+              ${ICONS.chevronLeft('ico-steer')}<span>A / ←</span>
+            </button>
             <div class="steer-track-wrap">
               <div class="steer-track-label">左右移動（A・D / 矢印キー / 右画面ドラッグ）</div>
               <div class="steer-track-bar">
-                <div class="steer-thumb" id="steer-thumb">🏃</div>
+                <div class="steer-thumb" id="steer-thumb">${ICONS.runner('ico-thumb')}</div>
               </div>
             </div>
-            <button type="button" class="steer-edge-btn" id="btn-steer-right" aria-label="右へ移動">D / → ▶</button>
+            <button type="button" class="steer-edge-btn" id="btn-steer-right" aria-label="右へ移動">
+              <span>D / →</span>${ICONS.chevronRight('ico-steer')}
+            </button>
           </div>
         </section>
       </main>
 
-      <!-- Title Modal -->
-      <div class="modal-backdrop" id="title-modal">
-        <div class="title-modal">
-          <div class="title-hero-banner">
-            <img src="./assets/title_hero.jpg" alt="スワイプ・ランデブー！" class="title-hero-img" />
-            <div class="title-hero-overlay">
-              <span class="title-genre-pill">マッチングアプリ × 3D歩道アクション</span>
-              <h1 class="title-main-heading">スワイプ・ランデブー！</h1>
-              <p class="title-sub-heading">〜右スワイプしたら即エンカウント！左で選び、右で捌く同時進行スコアアタック〜</p>
-            </div>
+      <!-- Fullscreen Live-3D Game Title Overlay (No white web modal!) -->
+      <div class="title-screen" id="title-modal">
+        <div class="title-top-bar">
+          <button type="button" class="title-corner-btn" id="btn-how-to-play">
+            <span class="corner-ico">${ICONS.help('ico-inline')}</span>
+            <span>あそびかた</span>
+          </button>
+          <div class="title-best-chip" id="title-best-chip">
+            <span class="best-ico">${ICONS.trophy('ico-inline')}</span>
+            <span class="best-label">BEST</span>
+            <strong class="best-num" id="title-best-value">0</strong>
+          </div>
+        </div>
+
+        <div class="title-center-stack">
+          ${this.buildTitleLogoSVG()}
+          <div class="title-tagline-pill">左でスワイプ、右の3D歩道で即エンカウント！</div>
+        </div>
+
+        <div class="title-bottom-dock">
+          <div class="diff-pill-group" role="radiogroup" aria-label="難易度選択">
+            <button type="button" class="diff-pill selected" id="diff-normal" data-diff="normal">
+              <span class="diff-pill-name">ふつう</span>
+              <span class="diff-pill-sub" id="best-score-normal">BEST 0</span>
+            </button>
+            <button type="button" class="diff-pill" id="diff-hard" data-diff="hard">
+              <span class="diff-pill-ico">${ICONS.flame('ico-mini')}</span>
+              <span class="diff-pill-name">難しい</span>
+              <span class="diff-pill-sub" id="best-score-hard">BEST 0</span>
+            </button>
           </div>
 
-          <div class="title-body">
-            <div class="rule-cards-grid">
-              <div class="rule-card">
-                <div class="rule-card-title">📱 左画面：マッチング選別</div>
-                <p class="rule-card-desc">
-                  写真・自己紹介・目印を見て<strong>右スワイプ（会う💚）</strong>すると即座に右の歩道奥に登場！<strong>左スワイプ（会わない✕）</strong>なら登場しません（スワイプ自体は±0点）。
-                </p>
-              </div>
-              <div class="rule-card">
-                <div class="rule-card-title">🏃 右画面：3D歩道で見極め接触</div>
-                <p class="rule-card-desc">
-                  近づくと相手の本性が判明！<strong>当たり（+1,000点〜）</strong>に接触し、<strong>外れ（-600点）</strong>と<strong>業者（-1,200点）</strong>は左右移動で回避！当たりを見逃しても減点なし（±0点）。
-                </p>
-              </div>
-            </div>
+          <button type="button" class="btn-arcade-start" id="btn-start-game">
+            <span class="btn-start-ico">${ICONS.play('ico-start')}</span>
+            <span class="btn-start-text">あそぶ</span>
+          </button>
 
-            <div class="title-controls-row">
-              <div class="difficulty-selector">
-                <div class="section-mini-label">難易度を選択</div>
-                <div class="diff-cards">
-                  <button type="button" class="diff-card selected" id="diff-normal" data-diff="normal">
-                    <div class="diff-card-header">
-                      <span class="diff-card-name">🌱 ふつう</span>
-                      <span class="diff-card-best" id="best-score-normal">BEST: 0</span>
-                    </div>
-                    <p class="diff-card-desc">初見でも左右の同時操作と相手の挙動見極めを気持ちよく楽しめる標準モード</p>
-                  </button>
-                  <button type="button" class="diff-card" id="diff-hard" data-diff="hard">
-                    <div class="diff-card-header">
-                      <span class="diff-card-name">🔥 難しい</span>
-                      <span class="diff-card-best" id="best-score-hard">BEST: 0</span>
-                    </div>
-                    <p class="diff-card-desc">週末ラッシュ！接近速度アップ＆クセの強い相手と通行人が交錯する高難度モード</p>
-                  </button>
-                </div>
-              </div>
-
-              <div class="audio-settings-box">
-                <div class="section-mini-label">サウンド設定（個別ON/OFF）</div>
-                <button type="button" class="audio-toggle-btn active" id="btn-toggle-bgm">
-                  <span class="audio-toggle-icon">🎵</span>
-                  <span class="audio-toggle-text">BGM: ON</span>
-                </button>
-                <button type="button" class="audio-toggle-btn active" id="btn-toggle-se">
-                  <span class="audio-toggle-icon">🔊</span>
-                  <span class="audio-toggle-text">効果音: ON</span>
-                </button>
-              </div>
-            </div>
-
-            <div class="title-start-row">
-              <button type="button" class="btn-start-game" id="btn-start-game">
-                🚀 ゲームスタート！（75秒スコアアタック）
-              </button>
-            </div>
+          <div class="title-audio-row">
+            <button type="button" class="arcade-switch-btn active" id="btn-toggle-bgm" aria-pressed="true">
+              <span class="switch-ico-circle">${ICONS.music('ico-switch')}</span>
+              <span class="switch-label">BGM</span>
+              <span class="switch-track"><span class="switch-knob"></span></span>
+            </button>
+            <button type="button" class="arcade-switch-btn active" id="btn-toggle-se" aria-pressed="true">
+              <span class="switch-ico-circle">${ICONS.sound('ico-switch')}</span>
+              <span class="switch-label">効果音</span>
+              <span class="switch-track"><span class="switch-knob"></span></span>
+            </button>
           </div>
         </div>
       </div>
 
-      <!-- Result Modal -->
+      <!-- Compact Illustrated How-To-Play Popup -->
+      <div class="modal-backdrop hidden" id="howto-modal">
+        <div class="arcade-popup howto-popup">
+          <div class="popup-header">
+            <span class="popup-header-ico">${ICONS.help('ico-inline')}</span>
+            <h2 class="popup-title">あそびかた</h2>
+            <button type="button" class="popup-close-btn" id="btn-close-howto" aria-label="閉じる">
+              ${ICONS.cross('ico-inline')}
+            </button>
+          </div>
+          <div class="howto-steps">
+            <div class="howto-card">
+              <div class="howto-badge step-1">${ICONS.swipeIcon('ico-inline')}<span>左画面：選別</span></div>
+              <p><strong>右スワイプ（会う）</strong>で相手が即座に右の3D歩道奥へ登場！<strong>左スワイプ</strong>で見送り（スワイプ自体は±0点）。</p>
+            </div>
+            <div class="howto-card">
+              <div class="howto-badge step-2">${ICONS.roadIcon('ico-inline')}<span>右画面：3D見極め</span></div>
+              <p>近づくと本性が判明！<strong>当たり（+1,000点〜）</strong>に接触し、<strong>外れ（-600点）</strong>と<strong>業者（-1,200点）</strong>は回避しよう。</p>
+            </div>
+            <div class="howto-card howto-card-wide">
+              <div class="howto-rules-pills">
+                <span class="hr-pill good">${ICONS.sparkle('ico-mini')} 当たり接触：加点＋連続コンボ</span>
+                <span class="hr-pill neutral">${ICONS.shield('ico-mini')} 回避・見逃し・通行人：すべて±0点</span>
+                <span class="hr-pill danger">${ICONS.alert('ico-mini')} 外れ -600 / 業者 -1,200</span>
+              </div>
+              <p class="howto-controls-line"><strong>PC：</strong>マウススワイプ ＋ A/D・矢印キー　／　<strong>スマホ：</strong>左親指スワイプ ＋ 右親指ドラッグ同時操作</p>
+            </div>
+          </div>
+          <button type="button" class="btn-arcade-ok" id="btn-howto-ok">わかった！</button>
+        </div>
+      </div>
+
+      <!-- Arcade Result Board Modal -->
       <div class="modal-backdrop hidden" id="result-modal">
         <div class="result-modal" id="result-modal-content"></div>
       </div>
@@ -219,8 +284,11 @@ export class GameController {
     this.overheadLayerEl = this.rootEl.querySelector('#overhead-layer') as HTMLElement;
     this.streetQueueEl = this.rootEl.querySelector('#street-queue-strip') as HTMLElement;
     this.toastLayerEl = this.rootEl.querySelector('#contact-toast-layer') as HTMLElement;
+    this.popLayerEl = this.rootEl.querySelector('#score-pop-layer') as HTMLElement;
+    this.impactFlashEl = this.rootEl.querySelector('#impact-flash') as HTMLElement;
     this.steerThumbEl = this.rootEl.querySelector('#steer-thumb') as HTMLElement;
-    this.titleModalEl = this.rootEl.querySelector('#title-modal') as HTMLElement;
+    this.titleScreenEl = this.rootEl.querySelector('#title-modal') as HTMLElement;
+    this.howtoModalEl = this.rootEl.querySelector('#howto-modal') as HTMLElement;
     this.resultModalEl = this.rootEl.querySelector('#result-modal') as HTMLElement;
     this.hudBgmBtn = this.rootEl.querySelector('#hud-btn-bgm') as HTMLButtonElement;
     this.hudSeBtn = this.rootEl.querySelector('#hud-btn-se') as HTMLButtonElement;
@@ -243,24 +311,44 @@ export class GameController {
       onPedestrianBump: () => this.handlePedestrianBump(),
     });
 
-    // Preload portrait backdrops and populate initial preview deck
+    // Populate lively 3D title demo cast immediately
+    this.sidewalkScene.setDemoCharacters(CHARACTERS);
+
     portraitStudio.preload().then(() => {
       this.matchingUI.setDeck(buildShuffledDeck(this.selectedDifficulty));
     });
   }
 
   private bindGlobalControls(): void {
-    // Difficulty selection on Title Screen
-    const diffBtns = this.rootEl.querySelectorAll('.diff-card');
+    // Difficulty pills on Title Screen
+    const diffBtns = this.rootEl.querySelectorAll('.diff-pill');
     diffBtns.forEach((btn) => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        (e.currentTarget as HTMLElement | null)?.blur();
         const diff = (btn as HTMLElement).dataset.diff as DifficultyId;
         if (!diff) return;
         this.selectedDifficulty = diff;
         diffBtns.forEach((b) => b.classList.toggle('selected', b === btn));
+        this.refreshTitleBestScore();
         soundEngine.unlock();
         soundEngine.playSwipeLeft();
       });
+    });
+
+    // How-to-play popup
+    const openHowTo = () => {
+      soundEngine.unlock();
+      soundEngine.playSwipeLeft();
+      this.howtoModalEl.classList.remove('hidden');
+    };
+    const closeHowTo = () => {
+      this.howtoModalEl.classList.add('hidden');
+    };
+    this.rootEl.querySelector('#btn-how-to-play')?.addEventListener('click', openHowTo);
+    this.rootEl.querySelector('#btn-close-howto')?.addEventListener('click', closeHowTo);
+    this.rootEl.querySelector('#btn-howto-ok')?.addEventListener('click', closeHowTo);
+    this.howtoModalEl.addEventListener('click', (e) => {
+      if (e.target === this.howtoModalEl) closeHowTo();
     });
 
     // Audio toggles (Title & HUD)
@@ -296,7 +384,7 @@ export class GameController {
       this.startGame(this.selectedDifficulty);
     });
 
-    // Keyboard controls (PC: A/D or ArrowLeft/ArrowRight for right screen; optional Q/E for quick left swipe)
+    // Keyboard controls
     window.addEventListener('keydown', (e) => {
       if (!this.isPlaying) return;
       const code = e.code;
@@ -347,11 +435,10 @@ export class GameController {
     bindHoldBtn(btnLeft, -1);
     bindHoldBtn(btnRight, 1);
 
-    // Right Pane Touch / Mouse Drag Steering (independent pointerId so simultaneous multi-touch with left thumb works!)
+    // Right Pane Touch / Mouse Drag Steering (independent pointerId for simultaneous dual-thumb input)
     const rightPane = this.rootEl.querySelector('#right-pane') as HTMLElement;
     rightPane.addEventListener('pointerdown', (e: PointerEvent) => {
       if (!this.isPlaying) return;
-      // Ignore if clicking edge buttons
       if ((e.target as HTMLElement).closest('.steer-edge-btn')) return;
       if (this.touchSteerPointerId !== null) return;
 
@@ -401,22 +488,24 @@ export class GameController {
     const titleBgm = this.rootEl.querySelector('#btn-toggle-bgm');
     if (titleBgm) {
       titleBgm.classList.toggle('active', bgmOn);
-      const txt = titleBgm.querySelector('.audio-toggle-text');
-      if (txt) txt.textContent = `BGM: ${bgmOn ? 'ON' : 'OFF'}`;
+      titleBgm.setAttribute('aria-pressed', String(bgmOn));
+      const ico = titleBgm.querySelector('.switch-ico-circle');
+      if (ico) ico.innerHTML = bgmOn ? ICONS.music('ico-switch') : ICONS.musicOff('ico-switch');
     }
 
     const titleSe = this.rootEl.querySelector('#btn-toggle-se');
     if (titleSe) {
       titleSe.classList.toggle('active', seOn);
-      const txt = titleSe.querySelector('.audio-toggle-text');
-      if (txt) txt.textContent = `効果音: ${seOn ? 'ON' : 'OFF'}`;
+      titleSe.setAttribute('aria-pressed', String(seOn));
+      const ico = titleSe.querySelector('.switch-ico-circle');
+      if (ico) ico.innerHTML = seOn ? ICONS.sound('ico-switch') : ICONS.soundOff('ico-switch');
     }
 
     this.hudBgmBtn.classList.toggle('muted', !bgmOn);
-    this.hudBgmBtn.textContent = bgmOn ? '🎵 BGM ON' : '🔇 BGM OFF';
+    this.hudBgmBtn.innerHTML = `<span class="hud-btn-ico">${bgmOn ? ICONS.music('ico-inline') : ICONS.musicOff('ico-inline')}</span><span class="hud-btn-lbl">BGM</span>`;
 
     this.hudSeBtn.classList.toggle('muted', !seOn);
-    this.hudSeBtn.textContent = seOn ? '🔊 SE ON' : '🔈 SE OFF';
+    this.hudSeBtn.innerHTML = `<span class="hud-btn-ico">${seOn ? ICONS.sound('ico-inline') : ICONS.soundOff('ico-inline')}</span><span class="hud-btn-lbl">SE</span>`;
   }
 
   private getBestScore(diff: DifficultyId): number {
@@ -434,7 +523,7 @@ export class GameController {
       try {
         localStorage.setItem(`${BEST_SCORE_KEY_PREFIX}${diff}`, String(newScore));
       } catch {
-        // Ignore storage quota errors
+        // Ignore storage errors
       }
       return true;
     }
@@ -442,24 +531,42 @@ export class GameController {
   }
 
   private refreshTitleBestScore(): void {
+    const normScore = this.getBestScore('normal');
+    const hardScore = this.getBestScore('hard');
     const normEl = this.rootEl.querySelector('#best-score-normal');
     const hardEl = this.rootEl.querySelector('#best-score-hard');
-    if (normEl) normEl.textContent = `BEST: ${this.getBestScore('normal').toLocaleString()}`;
-    if (hardEl) hardEl.textContent = `BEST: ${this.getBestScore('hard').toLocaleString()}`;
+    const mainBestEl = this.rootEl.querySelector('#title-best-value');
+    if (normEl) normEl.textContent = `BEST ${normScore.toLocaleString()}`;
+    if (hardEl) hardEl.textContent = `BEST ${hardScore.toLocaleString()}`;
+    if (mainBestEl) {
+      const current = this.selectedDifficulty === 'hard' ? hardScore : normScore;
+      mainBestEl.textContent = current.toLocaleString();
+    }
   }
 
   public showTitleScreen(): void {
     this.isPlaying = false;
     this.matchingUI.setEnabled(false);
     soundEngine.stopBgm();
+    this.rootEl.classList.add('mode-title');
     this.refreshTitleBestScore();
-    this.titleModalEl.classList.remove('hidden');
+    this.titleScreenEl.classList.remove('hidden');
+    this.howtoModalEl.classList.add('hidden');
     this.resultModalEl.classList.add('hidden');
+
+    this.sidewalkScene.reset();
+    this.sidewalkScene.setDemoCharacters(CHARACTERS);
+    requestAnimationFrame(() => this.sidewalkScene.resize());
   }
 
   public startGame(difficulty: DifficultyId): void {
     this.selectedDifficulty = difficulty;
     this.config = DIFFICULTY_CONFIGS[difficulty];
+
+    this.rootEl.classList.remove('mode-title');
+    this.titleScreenEl.classList.add('hidden');
+    this.howtoModalEl.classList.add('hidden');
+    this.resultModalEl.classList.add('hidden');
 
     this.isPlaying = true;
     this.remainingSec = this.config.durationSec;
@@ -484,6 +591,7 @@ export class GameController {
     this.overheadLayerEl.innerHTML = '';
     this.streetQueueEl.innerHTML = '';
     this.toastLayerEl.innerHTML = '';
+    this.popLayerEl.innerHTML = '';
     this.badgeEls.clear();
 
     this.diffBadgeEl.textContent = this.config.label;
@@ -491,17 +599,12 @@ export class GameController {
 
     this.sidewalkScene.setDifficulty(this.config);
     this.sidewalkScene.reset();
+    this.sidewalkScene.resize();
 
     const deck = buildShuffledDeck(difficulty);
     this.matchingUI.setDeck(deck);
     this.matchingUI.setEnabled(true);
-    this.matchingUI.setNudgeHighlight(
-      false,
-      '👉 右スワイプで即・歩道に登場！プロフィールから当たりを予想しよう',
-    );
-
-    this.titleModalEl.classList.add('hidden');
-    this.resultModalEl.classList.add('hidden');
+    this.matchingUI.setNudgeHighlight(false, '右スワイプで即・歩道奥に登場！');
 
     this.updateHUD();
     soundEngine.startBgm(difficulty);
@@ -523,7 +626,6 @@ export class GameController {
       timestampSec: this.elapsedSec,
     });
 
-    // Spawn immediately in far distance of 3D sidewalk
     this.sidewalkScene.spawnMatchedCharacter(character, instanceId);
     window.setTimeout(() => {
       if (this.isPlaying) soundEngine.playMatchSpawn();
@@ -531,7 +633,7 @@ export class GameController {
 
     this.matchingUI.setNudgeHighlight(
       false,
-      `💘 ${character.name}さんが右画面の歩道奥に登場！（目印: ${character.spotHint}）`,
+      `${character.name}が歩道奥に登場！（目印: ${character.spotHint}）`,
     );
     this.spawnLaunchArcToast(character);
   }
@@ -559,10 +661,11 @@ export class GameController {
     const miniUrl = portraitStudio.getMiniAvatarDataUrl(character);
     pill.innerHTML = `
       <img src="${miniUrl}" alt="" class="launch-pill-avatar" />
-      <span>💘 <strong>${this.escapeHtml(character.name)}</strong> が歩道の奥に登場！</span>
+      <span class="launch-pill-ico">${ICONS.heart('ico-mini')}</span>
+      <span><strong>${this.escapeHtml(character.name)}</strong> が歩道の奥に登場！</span>
     `;
     this.toastLayerEl.appendChild(pill);
-    window.setTimeout(() => pill.remove(), 1500);
+    window.setTimeout(() => pill.remove(), 1400);
   }
 
   private handleMatchRevealed(
@@ -576,6 +679,22 @@ export class GameController {
     if (badge) {
       badge.classList.add('revealed');
     }
+  }
+
+  private triggerImpactFlash(kind: 'good' | 'danger'): void {
+    this.impactFlashEl.className = `impact-flash flash-${kind}`;
+    void this.impactFlashEl.offsetWidth;
+    this.impactFlashEl.classList.add('active');
+  }
+
+  private spawnFloatingScorePop(delta: number, category: 'good' | 'bad' | 'scam'): void {
+    const pop = document.createElement('div');
+    pop.className = `score-pop ${category}`;
+    const sign = delta >= 0 ? `+${delta.toLocaleString()}` : delta.toLocaleString();
+    const tag = category === 'good' ? 'GOOD!' : category === 'bad' ? 'MISS!' : 'SCAM!';
+    pop.innerHTML = `<span class="score-pop-tag">${tag}</span><span class="score-pop-num">${sign}</span>`;
+    this.popLayerEl.appendChild(pop);
+    window.setTimeout(() => pop.remove(), 950);
   }
 
   private handleMatchContact(payload: ContactEventPayload): void {
@@ -606,14 +725,17 @@ export class GameController {
       }
       this.lastGoodContactTimeSec = this.elapsedSec;
       soundEngine.playContactGood(this.goodCombo);
+      this.triggerImpactFlash('good');
     } else if (character.category === 'bad') {
       this.goodCombo = 0;
-      delta = character.baseScore; // -600
+      delta = character.baseScore;
       soundEngine.playContactBad();
+      this.triggerImpactFlash('danger');
     } else {
       this.goodCombo = 0;
-      delta = character.baseScore; // -1200
+      delta = character.baseScore;
       soundEngine.playContactScam();
+      this.triggerImpactFlash('danger');
     }
 
     this.score += delta;
@@ -624,13 +746,13 @@ export class GameController {
       rec.comboAtContact = this.goodCombo;
     }
 
-    // Remove floating badge immediately on contact
     const badge = this.badgeEls.get(instanceId);
     if (badge) {
       badge.remove();
       this.badgeEls.delete(instanceId);
     }
 
+    this.spawnFloatingScorePop(delta, character.category);
     this.spawnContactResultToast(character, delta, this.goodCombo, isMultiMeet);
     this.updateHUD();
   }
@@ -639,7 +761,7 @@ export class GameController {
     const rec = this.records.get(instanceId);
     if (rec && rec.outcome === 'approaching') {
       rec.outcome = 'avoided';
-      rec.scoreDelta = 0; // Strictly 0 score change for avoiding/missing ANY character
+      rec.scoreDelta = 0;
     }
     const badge = this.badgeEls.get(instanceId);
     if (badge) {
@@ -657,10 +779,10 @@ export class GameController {
     const toast = document.createElement('div');
     toast.className = 'contact-toast bump';
     toast.innerHTML = `
-      <div class="toast-headline">💦 一般通行人と接触！（±0点・減速）</div>
+      <div class="toast-headline">${ICONS.bolt('ico-mini')}<span>一般通行人と接触（±0点・一時減速）</span></div>
     `;
     this.toastLayerEl.appendChild(toast);
-    window.setTimeout(() => toast.remove(), 1100);
+    window.setTimeout(() => toast.remove(), 1050);
   }
 
   private spawnContactResultToast(
@@ -673,18 +795,18 @@ export class GameController {
     toast.className = `contact-toast ${character.category}`;
 
     const sign = delta >= 0 ? `+${delta.toLocaleString()}` : delta.toLocaleString();
-    const catLabel =
+    const catHtml =
       character.category === 'good'
-        ? '✨ 当たり！'
+        ? `${ICONS.sparkle('ico-mini')}<span>当たり</span>`
         : character.category === 'bad'
-          ? '💥 外れ！'
-          : '🚨 業者！';
+          ? `${ICONS.burst('ico-mini')}<span>外れ</span>`
+          : `${ICONS.alert('ico-mini')}<span>業者</span>`;
     const extraTags: string[] = [];
     if (character.category === 'good' && combo >= 2) {
-      extraTags.push(`🔥 ${combo}連続コンボ！`);
+      extraTags.push(`${combo}連続コンボ`);
     }
     if (isMultiMeet) {
-      extraTags.push(`💖 ダブルランデブー +400!`);
+      extraTags.push(`ダブルランデブー +400`);
     }
 
     const miniUrl = portraitStudio.getMiniAvatarDataUrl(character);
@@ -694,9 +816,9 @@ export class GameController {
         <img src="${miniUrl}" alt="" class="toast-avatar" />
         <div class="toast-title-col">
           <div class="toast-badge-line">
-            <span class="toast-cat-pill">${catLabel}</span>
+            <span class="toast-cat-pill">${catHtml}</span>
             <span class="toast-name">${this.escapeHtml(character.name)}</span>
-            <span class="toast-score-delta">${sign}点</span>
+            <span class="toast-score-delta">${sign}</span>
           </div>
           <div class="toast-contact-title">${this.escapeHtml(character.contactTitle)}</div>
         </div>
@@ -714,7 +836,7 @@ export class GameController {
     if (allToasts.length > 2) {
       allToasts[0].remove();
     }
-    window.setTimeout(() => toast.remove(), 2700);
+    window.setTimeout(() => toast.remove(), 2600);
   }
 
   private updateHUD(): void {
@@ -729,8 +851,11 @@ export class GameController {
           : this.goodCombo === 3
             ? 'x1.5'
             : 'x1.8';
-    this.comboBadgeEl.textContent =
-      this.goodCombo >= 2 ? `🔥 誠実コンボ ${this.goodCombo}連続 (${mult})` : `誠実コンボ ${mult}`;
+    const comboTxt = this.comboBadgeEl.querySelector('.combo-txt');
+    if (comboTxt) {
+      comboTxt.textContent =
+        this.goodCombo >= 2 ? `${this.goodCombo}連続 ${mult}` : `コンボ ${mult}`;
+    }
     this.comboBadgeEl.classList.toggle('combo-hot', this.goodCombo >= 2);
 
     this.timerValEl.textContent = `${Math.max(0, this.remainingSec).toFixed(1)}s`;
@@ -739,17 +864,16 @@ export class GameController {
     this.timerWrapEl.classList.toggle('rush', this.isRush);
     const timerLabel = this.rootEl.querySelector('#hud-timer-label');
     if (timerLabel) {
-      timerLabel.textContent = this.isRush ? '🔥 週末RUSH!' : '残り時間';
+      timerLabel.textContent = this.isRush ? 'RUSH!' : 'TIME';
     }
 
-    this.activeStreetBadgeEl.innerHTML = `🚶 歩道接近中: <strong>${this.activeMatchCount}</strong>人`;
+    this.activeStreetBadgeEl.innerHTML = `${ICONS.runner('ico-inline')}<span>接近</span><strong>${this.activeMatchCount}</strong>`;
   }
 
   private syncOverheadBadges(items: ActiveMatchHUDItem[]): void {
     this.activeMatchCount = items.length;
     const activeIds = new Set<number>();
 
-    // Sort foreground (highest progress) to background (lowest progress) for anti-overlap layout
     const sorted = items.slice().sort((a, b) => b.progress - a.progress);
     const placedBoxes: Array<{ x: number; y: number }> = [];
 
@@ -764,7 +888,7 @@ export class GameController {
           <div class="match-badge-main">
             <img src="${miniUrl}" alt="" class="match-badge-avatar" />
             <div class="match-badge-text">
-              <span class="match-badge-name">💗 ${this.escapeHtml(item.character.name)}</span>
+              <span class="match-badge-name"><span class="badge-heart">${ICONS.heart('ico-tiny')}</span>${this.escapeHtml(item.character.name)}</span>
               <span class="match-badge-hint">${this.escapeHtml(item.character.spotHint)}</span>
             </div>
           </div>
@@ -782,7 +906,6 @@ export class GameController {
         let drawX = item.screenX;
         let drawY = item.screenY;
 
-        // De-overlap against closer badges in screen space
         for (let pass = 0; pass < 4; pass++) {
           let collided = false;
           for (const box of placedBoxes) {
@@ -845,7 +968,7 @@ export class GameController {
     if (this.activeMatchCount === 0 && this.elapsedSec - this.lastSwipeTimeSec > 4.2) {
       this.matchingUI.setNudgeHighlight(
         true,
-        '⚡ 歩道に待ち合わせ相手がいません！左のカードを右スワイプして呼び出そう！',
+        '歩道に待ち合わせ相手がいません！右スワイプで呼び出そう！',
       );
     }
 
@@ -877,12 +1000,7 @@ export class GameController {
     if (this.isPlaying) {
       this.stepSimulation(dt);
     } else {
-      // Idle preview scroll only
-      (this.sidewalkScene as unknown as { update: (dt: number, isRush: boolean, idle?: boolean) => void }).update(
-        dt * 0.35,
-        false,
-        true,
-      );
+      this.sidewalkScene.update(dt, false, true);
     }
 
     this.sidewalkScene.render();
@@ -939,16 +1057,16 @@ export class GameController {
               const miniUrl = portraitStudio.getMiniAvatarDataUrl(c);
               const catBadge =
                 c.category === 'good'
-                  ? '<span class="rev-cat good">✨ 当たり</span>'
+                  ? `<span class="rev-cat good">${ICONS.sparkle('ico-tiny')}<span>当たり</span></span>`
                   : c.category === 'bad'
-                    ? '<span class="rev-cat bad">💥 外れ</span>'
-                    : '<span class="rev-cat scam">🚨 業者</span>';
+                    ? `<span class="rev-cat bad">${ICONS.burst('ico-tiny')}<span>外れ</span></span>`
+                    : `<span class="rev-cat scam">${ICONS.alert('ico-tiny')}<span>業者</span></span>`;
 
               const outcomeLabel =
                 r.outcome === 'contacted'
                   ? `<span class="rev-outcome contacted">接触 (${r.scoreDelta >= 0 ? '+' : ''}${r.scoreDelta.toLocaleString()}点)</span>`
                   : r.outcome === 'avoided'
-                    ? `<span class="rev-outcome avoided">華麗にスルー (±0点)</span>`
+                    ? `<span class="rev-outcome avoided">回避 (±0点)</span>`
                     : `<span class="rev-outcome avoided">到着前タイムアップ (±0点)</span>`;
 
               return `
@@ -974,8 +1092,8 @@ export class GameController {
         <div class="result-rank-badge rank-${rank}">${rank}</div>
         <div class="result-title-group">
           <div class="result-mode-line">
-            <span>難易度: ${this.config.label}</span>
-            ${isNewBest ? '<span class="new-record-pill">🏆 NEW RECORD!</span>' : ''}
+            <span class="result-diff-tag">${this.config.label}</span>
+            ${isNewBest ? `<span class="new-record-pill">${ICONS.trophy('ico-tiny')}<span>NEW RECORD!</span></span>` : ''}
           </div>
           <h2 class="result-catch">${this.escapeHtml(title)}</h2>
           <p class="result-comment">${this.escapeHtml(comment)}</p>
@@ -983,44 +1101,44 @@ export class GameController {
         <div class="result-score-box">
           <span class="result-score-label">FINAL SCORE</span>
           <span class="result-score-value" id="result-final-score">${this.score.toLocaleString()}</span>
-          <span class="result-best-sub">自己ベスト: ${bestScore.toLocaleString()}</span>
+          <span class="result-best-sub">BEST ${bestScore.toLocaleString()}</span>
         </div>
       </div>
 
       <div class="result-stats-grid">
         <div class="stat-box good">
-          <span class="stat-label">✨ 当たり接触</span>
+          <span class="stat-label">${ICONS.sparkle('ico-tiny')}<span>当たり</span></span>
           <span class="stat-val">${metGood}人</span>
         </div>
         <div class="stat-box bad">
-          <span class="stat-label">💥 外れ接触</span>
+          <span class="stat-label">${ICONS.burst('ico-tiny')}<span>外れ</span></span>
           <span class="stat-val">${hitBad}人</span>
         </div>
         <div class="stat-box scam">
-          <span class="stat-label">🚨 業者接触</span>
+          <span class="stat-label">${ICONS.alert('ico-tiny')}<span>業者</span></span>
           <span class="stat-val">${hitScam}人</span>
         </div>
         <div class="stat-box neutral">
-          <span class="stat-label">🛡️ 危険を歩道回避</span>
+          <span class="stat-label">${ICONS.shield('ico-tiny')}<span>危険回避</span></span>
           <span class="stat-val">${avoidedDanger}人</span>
         </div>
         <div class="stat-box neutral">
-          <span class="stat-label">🔥 最大誠実コンボ</span>
-          <span class="stat-val">${this.maxCombo}連続 (左見送り${passedLeft}人)</span>
+          <span class="stat-label">${ICONS.flame('ico-tiny')}<span>最大コンボ</span></span>
+          <span class="stat-val">${this.maxCombo}連続</span>
         </div>
       </div>
 
       <div class="review-section">
-        <div class="review-section-title">📖 今日のマッチング振り返り図鑑（歩道に登場した相手と真相）</div>
+        <div class="review-section-title">${ICONS.book('ico-inline')}<span>今日のマッチング振り返り図鑑（左見送り ${passedLeft}人）</span></div>
         <div class="review-list">${reviewListHtml}</div>
       </div>
 
       <div class="result-actions">
         <button type="button" class="btn-result-retry" id="btn-retry">
-          🔄 同じ難易度でもう一回遊ぶ！
+          ${ICONS.retry('ico-inline')}<span>もう一回あそぶ</span>
         </button>
         <button type="button" class="btn-result-title" id="btn-back-title">
-          🏠 タイトル・難易度選択へ
+          ${ICONS.home('ico-inline')}<span>タイトルへ</span>
         </button>
       </div>
     `;

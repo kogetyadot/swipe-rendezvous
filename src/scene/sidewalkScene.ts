@@ -119,6 +119,13 @@ export class SidewalkScene {
   private activeMatches: ActiveMatchedEntity[] = [];
   private pedestrians: ActivePedestrian[] = [];
   private particles: BurstParticle[] = [];
+  private spawnBeams: Array<{
+    group: THREE.Group;
+    pillar: THREE.Mesh;
+    ring: THREE.Mesh;
+    age: number;
+    maxAge: number;
+  }> = [];
 
   private demoPool: CharacterProfile[] = [];
   private demoActors: Array<{
@@ -522,6 +529,11 @@ export class SidewalkScene {
     }
     this.particles = [];
 
+    for (const b of this.spawnBeams) {
+      this.scene.remove(b.group);
+    }
+    this.spawnBeams = [];
+
     this.playerX = 0;
     this.playerVelX = 0;
     this.inputAxis = 0;
@@ -537,6 +549,40 @@ export class SidewalkScene {
 
     this.protagonist.root.position.set(0, 0, PROTAGONIST_Z);
     this.protagonist.root.rotation.set(0, Math.PI, 0);
+  }
+
+  private spawnLaneBeam(x: number, z: number): void {
+    const group = new THREE.Group();
+    group.position.set(x, 0, z);
+
+    // Warm neutral golden-white vertical beacon pillar so player immediately spots which lane spawned
+    const pillarMat = new THREE.MeshBasicMaterial({
+      color: '#fff2a6',
+      transparent: true,
+      opacity: 0.72,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const pillar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.45, 0.78, 8.5, 14, 1, true),
+      pillarMat
+    );
+    pillar.position.y = 4.25;
+
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: '#ff90b3',
+      transparent: true,
+      opacity: 0.85,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.55, 1.05, 22), ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.06;
+
+    group.add(pillar, ring);
+    this.scene.add(group);
+    this.spawnBeams.push({ group, pillar, ring, age: 0, maxAge: 0.68 });
   }
 
   public spawnMatchedCharacter(character: CharacterProfile, instanceId: number): void {
@@ -588,6 +634,8 @@ export class SidewalkScene {
     rig.root.position.set(chosenX, 0, spawnZ);
     rig.root.scale.setScalar(0.05);
     this.scene.add(rig.root);
+
+    this.spawnLaneBeam(chosenX, spawnZ);
 
     this.activeMatches.push({
       instanceId,
@@ -1203,6 +1251,25 @@ export class SidewalkScene {
       pt.mesh.rotation.z += pt.rotSpeed.z * clampedDt;
       const lifeRatio = 1 - pt.age / pt.maxAge;
       pt.mesh.scale.setScalar(Math.max(0.01, lifeRatio));
+    }
+
+    // 5b. Update lane spawn light beacons
+    for (let i = this.spawnBeams.length - 1; i >= 0; i--) {
+      const b = this.spawnBeams[i];
+      b.age += clampedDt;
+      if (b.age >= b.maxAge) {
+        this.scene.remove(b.group);
+        this.spawnBeams.splice(i, 1);
+        continue;
+      }
+      const t = b.age / b.maxAge;
+      b.group.position.z += scrollSpeed * 0.5 * clampedDt;
+      const fade = Math.max(0, 1 - t);
+      (b.pillar.material as THREE.MeshBasicMaterial).opacity = fade * 0.68;
+      b.pillar.scale.set(1 - t * 0.45, 1 + t * 0.35, 1 - t * 0.45);
+      (b.ring.material as THREE.MeshBasicMaterial).opacity = fade * 0.85;
+      const ringScale = 1 + t * 1.9;
+      b.ring.scale.set(ringScale, ringScale, 1);
     }
 
     // 6. Update third-person adaptive camera tracking & shake BEFORE projecting overhead HUD badges

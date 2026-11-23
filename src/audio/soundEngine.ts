@@ -202,6 +202,24 @@ export class SoundEngine {
     this.stopSchedulerOnly();
   }
 
+  public pauseBgm(): void {
+    this.stopSchedulerOnly();
+  }
+
+  public resumeBgm(): void {
+    if (!this.bgmWanted || !this._bgmEnabled || this.bgmPlaying) return;
+    const ctx = this.ensureContext();
+    if (!ctx || !this.bgmGain) return;
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+    this.bgmPlaying = true;
+    this.nextStepTime = ctx.currentTime + 0.04;
+    this.schedulerTimer = window.setInterval(() => {
+      this.scheduleBgmSteps();
+    }, 35);
+  }
+
   private stopSchedulerOnly(): void {
     this.bgmPlaying = false;
     if (this.schedulerTimer !== null) {
@@ -698,6 +716,30 @@ export class SoundEngine {
     gain.connect(this.seGain);
     osc.start(startTime);
     osc.stop(startTime + duration + 0.02);
+  }
+
+  public playDodgeSuccess(): void {
+    if (!this._seEnabled) return;
+    const ctx = this.ensureContext();
+    if (!ctx || !this.seGain) return;
+    const now = ctx.currentTime;
+    // Crisp upward swoosh + sparkling safe ping
+    this.playNoiseBurst(now, 0.09, 900, 3200, 0.14);
+    this.playSlideTone(now + 0.02, 660, 1046, 'triangle', 0.11, 0.18);
+    this.playSlideTone(now + 0.07, 1046, 1318, 'sine', 0.12, 0.15);
+  }
+
+  public playReadyGo(isGo: boolean): void {
+    if (!this._seEnabled) return;
+    const ctx = this.ensureContext();
+    if (!ctx || !this.seGain) return;
+    const now = ctx.currentTime;
+    if (!isGo) {
+      this.playSlideTone(now, 523.25, 587.33, 'triangle', 0.14, 0.24);
+    } else {
+      this.playSlideTone(now, 783.99, 1046.5, 'triangle', 0.16, 0.3);
+      this.playSlideTone(now + 0.06, 1046.5, 1318.5, 'sine', 0.22, 0.24);
+    }
   }
 
   private playNoiseBurst(

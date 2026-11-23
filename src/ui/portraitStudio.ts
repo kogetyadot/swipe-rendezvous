@@ -36,7 +36,7 @@ const PROP_BADGE_LABELS: Record<InitialPropType, string> = {
   cake_box: 'ケーキ箱',
   soccer_ball: 'サッカーボール',
   art_frame: 'アート額縁',
-  watch: '⌚ 高級腕時計',
+  watch: '高級腕時計',
   jewelry_box: '宝石ケース',
 };
 

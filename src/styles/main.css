@@ -3097,4 +3097,189 @@ button {
   .result-stats-grid {
     grid-template-columns: repeat(3, 1fr);
   }
+
+  .hud-icon-btn {
+    padding: 3px 5px;
+  }
+
+  .contact-toast-layer {
+    top: 6px;
+    left: 6px;
+    width: calc(100% - 12px);
+  }
+
+  .contact-toast-slim {
+    padding: 5px 8px;
+  }
+
+  .contact-toast-slim .toast-avatar {
+    width: 26px;
+    height: 26px;
+  }
+
+  .contact-toast-slim .toast-contact-title {
+    font-size: 0.68rem;
+  }
 }
+
+/* ==========================================================================
+   SLIM TOAST, DODGE POPUP, STAGE BANNERS (READY/GO/TIME UP) & PAUSE POPUP
+   ========================================================================== */
+.contact-toast-slim {
+  padding: 6px 10px;
+  gap: 2px;
+}
+
+.contact-toast-slim .toast-avatar {
+  width: 30px;
+  height: 30px;
+}
+
+.contact-toast-slim .toast-contact-title {
+  font-size: 0.74rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toast-inline-extra {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--pop-coral);
+  color: #ffffff;
+  font-size: 0.64rem;
+  font-weight: 800;
+}
+
+.score-pop.dodge {
+  bottom: 33%;
+}
+
+.score-pop.dodge .score-pop-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 1.08rem;
+  color: #5ee7ff;
+}
+
+.score-pop-dodge-sub {
+  margin-top: 2px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #ffffff;
+  border: 1.8px solid #5ee7ff;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+/* Arcade READY / GO / TIME UP Banner */
+.stage-banner {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  transform: translate(-50%, -50%);
+  z-index: 60;
+  pointer-events: none;
+  font-family: var(--font-display);
+  font-size: clamp(2.2rem, 5.2vw, 4rem);
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #ffda44;
+  -webkit-text-stroke: 3.5px var(--ink);
+  paint-order: stroke fill;
+  text-shadow:
+    0 6px 0 var(--ink),
+    0 12px 24px rgba(24, 14, 40, 0.45);
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .stage-banner {
+    font-size: clamp(1.5rem, 6.4vw, 2.2rem);
+    -webkit-text-stroke: 2.5px var(--ink);
+    text-shadow:
+      0 4px 0 var(--ink),
+      0 8px 16px rgba(24, 14, 40, 0.4);
+  }
+}
+
+.stage-banner.banner-go {
+  color: #3df5a7;
+}
+
+.stage-banner.banner-timeup {
+  color: #ff5c8a;
+}
+
+.stage-banner.pop {
+  animation: stageBannerPop 0.34s cubic-bezier(0.2, 1.45, 0.35, 1);
+}
+
+@keyframes stageBannerPop {
+  0% {
+    transform: translate(-50%, -50%) scale(0.45) rotate(-6deg);
+    opacity: 0;
+  }
+  70% {
+    transform: translate(-50%, -50%) scale(1.1) rotate(2deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+/* Pause Modal */
+.pause-popup {
+  width: min(360px, 100%);
+  padding: 16px 18px 18px;
+  gap: 14px;
+}
+
+.pause-ico {
+  background: var(--pop-amber) !important;
+  color: var(--ink) !important;
+}
+
+.pause-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.btn-pause-resume,
+.btn-pause-sub {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 16px;
+  border-radius: 14px;
+  border: 3px solid var(--ink);
+  box-shadow: 0 4px 0 var(--ink);
+  font-family: var(--font-display);
+  font-size: 0.96rem;
+  font-weight: 800;
+  color: var(--ink);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+.btn-pause-resume {
+  background: linear-gradient(180deg, #ffda44 0%, #ff9914 100%);
+}
+
+.btn-pause-sub {
+  background: #ffffff;
+}
+
+.btn-pause-resume:active,
+.btn-pause-sub:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--ink);
+}
+

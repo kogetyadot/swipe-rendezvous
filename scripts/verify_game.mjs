@@ -137,12 +137,21 @@ async function run() {
       };
     });
 
-    // Finish round & inspect Result Screen with populated review log
+    // Test Pause modal open & resume cleanly
+    await page.click('#hud-btn-pause');
+    await page.waitForTimeout(220);
+    const pauseOpen = await page.evaluate(() => !document.getElementById('pause-modal')?.classList.contains('hidden'));
+    await page.click('#btn-pause-resume');
+    await page.waitForTimeout(180);
+
+    // Finish round through TIME UP! outro & inspect Result Screen with populated review log
     await page.evaluate(() => {
       const g = window.__GAME__;
       if (g) {
+        g.readyTimer = 0;
         g.elapsedSec = g.config.durationSec - 0.02;
-        g.stepSimulation(0.05);
+        g.stepSimulation(0.05); // triggers TIME UP!
+        for (let i = 0; i < 20; i++) g.stepSimulation(0.05); // advances through 0.72s TIME UP outro
       }
     });
     await page.waitForTimeout(450);
@@ -158,6 +167,7 @@ async function run() {
         finalScore,
       };
     });
+    resultMetrics.pauseVerified = pauseOpen;
 
     // Test Hard Mode from Title Screen
     await page.click('#btn-back-title');

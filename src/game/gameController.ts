@@ -24,6 +24,9 @@ export class GameController {
   private sidewalkScene!: SidewalkScene;
 
   private isPlaying = false;
+  private isPaused = false;
+  private readyTimer = 0;
+  private timeUpTimer = 0;
   private remainingSec = 75;
   private elapsedSec = 0;
   private isRush = false;
@@ -59,9 +62,11 @@ export class GameController {
   private toastLayerEl!: HTMLElement;
   private popLayerEl!: HTMLElement;
   private impactFlashEl!: HTMLElement;
+  private stageBannerEl!: HTMLElement;
   private steerThumbEl!: HTMLElement;
   private titleScreenEl!: HTMLElement;
   private howtoModalEl!: HTMLElement;
+  private pauseModalEl!: HTMLElement;
   private resultModalEl!: HTMLElement;
   private hudBgmBtn!: HTMLButtonElement;
   private hudSeBtn!: HTMLButtonElement;
@@ -150,6 +155,9 @@ export class GameController {
           <button type="button" class="hud-icon-btn" id="hud-btn-se" title="効果音 オン/オフ">
             <span class="hud-btn-ico">${ICONS.sound('ico-inline')}</span><span class="hud-btn-lbl">SE</span>
           </button>
+          <button type="button" class="hud-icon-btn" id="hud-btn-pause" title="一時停止 (Esc)">
+            <span class="hud-btn-ico">${ICONS.pause('ico-inline')}</span><span class="hud-btn-lbl">ポーズ</span>
+          </button>
           <button type="button" class="hud-icon-btn hud-btn-title" id="hud-btn-menu" title="タイトル画面へ戻る">
             <span class="hud-btn-ico">${ICONS.home('ico-inline')}</span><span class="hud-btn-lbl">タイトル</span>
           </button>
@@ -166,6 +174,8 @@ export class GameController {
           <div class="overhead-layer" id="overhead-layer"></div>
           <div class="score-pop-layer" id="score-pop-layer"></div>
           <div class="contact-toast-layer" id="contact-toast-layer"></div>
+          <!-- READY / GO / TIME UP Arcade Banner -->
+          <div class="stage-banner hidden" id="stage-banner" aria-live="polite"></div>
 
           <div class="steering-hud" id="steering-touch-zone">
             <button type="button" class="steer-edge-btn" id="btn-steer-left" aria-label="左へ移動">
@@ -268,6 +278,27 @@ export class GameController {
         </div>
       </div>
 
+      <!-- Pause Popup -->
+      <div class="modal-backdrop hidden" id="pause-modal">
+        <div class="arcade-popup pause-popup">
+          <div class="popup-header">
+            <span class="popup-header-ico pause-ico">${ICONS.pause('ico-inline')}</span>
+            <h2 class="popup-title">一時停止中</h2>
+          </div>
+          <div class="pause-actions">
+            <button type="button" class="btn-pause-resume" id="btn-pause-resume">
+              ${ICONS.play('ico-inline')}<span>ゲームを再開する</span>
+            </button>
+            <button type="button" class="btn-pause-sub" id="btn-pause-retry">
+              ${ICONS.retry('ico-inline')}<span>最初からやり直す</span>
+            </button>
+            <button type="button" class="btn-pause-sub" id="btn-pause-title">
+              ${ICONS.home('ico-inline')}<span>タイトルへ戻る</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Arcade Result Board Modal -->
       <div class="modal-backdrop hidden" id="result-modal">
         <div class="result-modal" id="result-modal-content"></div>
@@ -286,9 +317,11 @@ export class GameController {
     this.toastLayerEl = this.rootEl.querySelector('#contact-toast-layer') as HTMLElement;
     this.popLayerEl = this.rootEl.querySelector('#score-pop-layer') as HTMLElement;
     this.impactFlashEl = this.rootEl.querySelector('#impact-flash') as HTMLElement;
+    this.stageBannerEl = this.rootEl.querySelector('#stage-banner') as HTMLElement;
     this.steerThumbEl = this.rootEl.querySelector('#steer-thumb') as HTMLElement;
     this.titleScreenEl = this.rootEl.querySelector('#title-modal') as HTMLElement;
     this.howtoModalEl = this.rootEl.querySelector('#howto-modal') as HTMLElement;
+    this.pauseModalEl = this.rootEl.querySelector('#pause-modal') as HTMLElement;
     this.resultModalEl = this.rootEl.querySelector('#result-modal') as HTMLElement;
     this.hudBgmBtn = this.rootEl.querySelector('#hud-btn-bgm') as HTMLButtonElement;
     this.hudSeBtn = this.rootEl.querySelector('#hud-btn-se') as HTMLButtonElement;
@@ -371,6 +404,22 @@ export class GameController {
     this.hudBgmBtn.addEventListener('click', toggleBgm);
     this.hudSeBtn.addEventListener('click', toggleSe);
 
+    // Pause button & modal actions
+    this.rootEl.querySelector('#hud-btn-pause')?.addEventListener('click', (e) => {
+      (e.currentTarget as HTMLElement | null)?.blur();
+      this.setPaused(!this.isPaused);
+    });
+    this.rootEl.querySelector('#btn-pause-resume')?.addEventListener('click', () => {
+      this.setPaused(false);
+    });
+    this.rootEl.querySelector('#btn-pause-retry')?.addEventListener('click', () => {
+      soundEngine.unlock();
+      this.startGame(this.selectedDifficulty);
+    });
+    this.rootEl.querySelector('#btn-pause-title')?.addEventListener('click', () => {
+      this.showTitleScreen();
+    });
+
     // Return to title button
     this.rootEl.querySelector('#hud-btn-menu')?.addEventListener('click', (e) => {
       (e.currentTarget as HTMLElement | null)?.blur();
@@ -388,6 +437,15 @@ export class GameController {
     window.addEventListener('keydown', (e) => {
       if (!this.isPlaying) return;
       const code = e.code;
+      if (code === 'Escape') {
+        e.preventDefault();
+        if (this.timeUpTimer <= 0) {
+          this.setPaused(!this.isPaused);
+        }
+        return;
+      }
+      if (this.isPaused || this.timeUpTimer > 0) return;
+
       if (code === 'KeyA' || code === 'ArrowLeft') {
         e.preventDefault();
         this.keysHeld.add('left');
@@ -546,17 +604,52 @@ export class GameController {
 
   public showTitleScreen(): void {
     this.isPlaying = false;
+    this.isPaused = false;
+    this.readyTimer = 0;
+    this.timeUpTimer = 0;
     this.matchingUI.setEnabled(false);
     soundEngine.stopBgm();
     this.rootEl.classList.add('mode-title');
     this.refreshTitleBestScore();
     this.titleScreenEl.classList.remove('hidden');
     this.howtoModalEl.classList.add('hidden');
+    this.pauseModalEl.classList.add('hidden');
     this.resultModalEl.classList.add('hidden');
+    this.stageBannerEl.classList.add('hidden');
 
     this.sidewalkScene.reset();
     this.sidewalkScene.setDemoCharacters(CHARACTERS);
     requestAnimationFrame(() => this.sidewalkScene.resize());
+  }
+
+  public setPaused(paused: boolean): void {
+    if (!this.isPlaying || this.timeUpTimer > 0) return;
+    this.isPaused = paused;
+    this.pauseModalEl.classList.toggle('hidden', !paused);
+    this.matchingUI.setEnabled(!paused);
+    if (paused) {
+      this.keysHeld.clear();
+      this.touchSteerPointerId = null;
+      this.touchDirectTargetX = null;
+      this.buttonSteerDir = 0;
+      soundEngine.pauseBgm();
+    } else {
+      soundEngine.resumeBgm();
+    }
+  }
+
+  private showStageBanner(text: string, variant: 'ready' | 'go' | 'timeup', autoHideMs = 0): void {
+    this.stageBannerEl.textContent = text;
+    this.stageBannerEl.className = `stage-banner banner-${variant}`;
+    void this.stageBannerEl.offsetWidth;
+    this.stageBannerEl.classList.add('pop');
+    if (autoHideMs > 0) {
+      window.setTimeout(() => {
+        if (this.stageBannerEl.textContent === text) {
+          this.stageBannerEl.classList.add('hidden');
+        }
+      }, autoHideMs);
+    }
   }
 
   public startGame(difficulty: DifficultyId): void {
@@ -566,9 +659,13 @@ export class GameController {
     this.rootEl.classList.remove('mode-title');
     this.titleScreenEl.classList.add('hidden');
     this.howtoModalEl.classList.add('hidden');
+    this.pauseModalEl.classList.add('hidden');
     this.resultModalEl.classList.add('hidden');
 
     this.isPlaying = true;
+    this.isPaused = false;
+    this.readyTimer = 0.78;
+    this.timeUpTimer = 0;
     this.remainingSec = this.config.durationSec;
     this.elapsedSec = 0;
     this.isRush = false;
@@ -603,15 +700,23 @@ export class GameController {
 
     const deck = buildShuffledDeck(difficulty);
     this.matchingUI.setDeck(deck);
+    // Keep left card interactive right away so eager players can swipe immediately during READY
     this.matchingUI.setEnabled(true);
     this.matchingUI.setNudgeHighlight(false, '右スワイプで即・歩道奥に登場！');
 
     this.updateHUD();
+    this.showStageBanner('READY...', 'ready');
+    soundEngine.playReadyGo(false);
     soundEngine.startBgm(difficulty);
   }
 
   private handleSwipeRight(character: CharacterProfile): void {
-    if (!this.isPlaying) return;
+    if (!this.isPlaying || this.isPaused || this.timeUpTimer > 0) return;
+    if (this.readyTimer > 0) {
+      this.readyTimer = 0;
+      this.showStageBanner('GO!', 'go', 520);
+      soundEngine.playReadyGo(true);
+    }
     this.lastSwipeTimeSec = this.elapsedSec;
     soundEngine.playSwipeRight();
 
@@ -628,7 +733,7 @@ export class GameController {
 
     this.sidewalkScene.spawnMatchedCharacter(character, instanceId);
     window.setTimeout(() => {
-      if (this.isPlaying) soundEngine.playMatchSpawn();
+      if (this.isPlaying && !this.isPaused) soundEngine.playMatchSpawn();
     }, 110);
 
     this.matchingUI.setNudgeHighlight(
@@ -639,7 +744,12 @@ export class GameController {
   }
 
   private handleSwipeLeft(character: CharacterProfile): void {
-    if (!this.isPlaying) return;
+    if (!this.isPlaying || this.isPaused || this.timeUpTimer > 0) return;
+    if (this.readyTimer > 0) {
+      this.readyTimer = 0;
+      this.showStageBanner('GO!', 'go', 520);
+      soundEngine.playReadyGo(true);
+    }
     this.lastSwipeTimeSec = this.elapsedSec;
     soundEngine.playSwipeLeft();
 
@@ -757,7 +867,15 @@ export class GameController {
     this.updateHUD();
   }
 
-  private handleMatchAvoided(instanceId: number, _character: CharacterProfile): void {
+  private spawnDodgePop(name: string): void {
+    const pop = document.createElement('div');
+    pop.className = 'score-pop dodge';
+    pop.innerHTML = `<span class="score-pop-tag">${ICONS.shield('ico-mini')} SAFE! 回避</span><span class="score-pop-dodge-sub">${this.escapeHtml(name)} ±0</span>`;
+    this.popLayerEl.appendChild(pop);
+    window.setTimeout(() => pop.remove(), 880);
+  }
+
+  private handleMatchAvoided(instanceId: number, character: CharacterProfile): void {
     const rec = this.records.get(instanceId);
     if (rec && rec.outcome === 'approaching') {
       rec.outcome = 'avoided';
@@ -768,10 +886,19 @@ export class GameController {
       badge.remove();
       this.badgeEls.delete(instanceId);
     }
+    // Reward dodging a 'bad' or 'scam' person with crisp audiovisual feedback (score stays ±0!)
+    if (
+      this.isPlaying &&
+      this.timeUpTimer <= 0 &&
+      (character.category === 'bad' || character.category === 'scam')
+    ) {
+      soundEngine.playDodgeSuccess();
+      this.spawnDodgePop(character.name);
+    }
   }
 
   private handlePedestrianBump(): void {
-    if (!this.isPlaying) return;
+    if (!this.isPlaying || this.timeUpTimer > 0) return;
     soundEngine.playPedestrianBump();
     const existingBump = this.toastLayerEl.querySelector('.contact-toast.bump');
     if (existingBump) existingBump.remove();
@@ -779,10 +906,10 @@ export class GameController {
     const toast = document.createElement('div');
     toast.className = 'contact-toast bump';
     toast.innerHTML = `
-      <div class="toast-headline">${ICONS.bolt('ico-mini')}<span>一般通行人と接触（±0点・一時減速）</span></div>
+      <div class="toast-headline">${ICONS.bolt('ico-mini')}<span>一般通行人と接触（±0点）</span></div>
     `;
     this.toastLayerEl.appendChild(toast);
-    window.setTimeout(() => toast.remove(), 1050);
+    window.setTimeout(() => toast.remove(), 950);
   }
 
   private spawnContactResultToast(
@@ -792,25 +919,26 @@ export class GameController {
     isMultiMeet: boolean,
   ): void {
     const toast = document.createElement('div');
-    toast.className = `contact-toast ${character.category}`;
+    toast.className = `contact-toast contact-toast-slim ${character.category}`;
 
     const sign = delta >= 0 ? `+${delta.toLocaleString()}` : delta.toLocaleString();
     const catHtml =
       character.category === 'good'
-        ? `${ICONS.sparkle('ico-mini')}<span>当たり</span>`
+        ? `${ICONS.sparkle('ico-tiny')}<span>当たり</span>`
         : character.category === 'bad'
-          ? `${ICONS.burst('ico-mini')}<span>外れ</span>`
-          : `${ICONS.alert('ico-mini')}<span>業者</span>`;
+          ? `${ICONS.burst('ico-tiny')}<span>外れ</span>`
+          : `${ICONS.alert('ico-tiny')}<span>業者</span>`;
     const extraTags: string[] = [];
     if (character.category === 'good' && combo >= 2) {
-      extraTags.push(`${combo}連続コンボ`);
+      extraTags.push(`${combo}連続`);
     }
     if (isMultiMeet) {
-      extraTags.push(`ダブルランデブー +400`);
+      extraTags.push(`Wランデブー +400`);
     }
 
     const miniUrl = portraitStudio.getMiniAvatarDataUrl(character);
 
+    // Slim 1-2 line toast so narrow mobile viewports never hide approaching 3D characters; full details live in the post-game review log
     toast.innerHTML = `
       <div class="toast-top-row">
         <img src="${miniUrl}" alt="" class="toast-avatar" />
@@ -820,23 +948,19 @@ export class GameController {
             <span class="toast-name">${this.escapeHtml(character.name)}</span>
             <span class="toast-score-delta">${sign}</span>
           </div>
-          <div class="toast-contact-title">${this.escapeHtml(character.contactTitle)}</div>
+          <div class="toast-contact-title">${this.escapeHtml(character.contactTitle)}${
+            extraTags.length > 0 ? ` <span class="toast-inline-extra">${extraTags.join(' / ')}</span>` : ''
+          }</div>
         </div>
       </div>
-      <div class="toast-detail">${this.escapeHtml(character.contactDetail)}</div>
-      ${
-        extraTags.length > 0
-          ? `<div class="toast-extra-row">${extraTags.join(' / ')}</div>`
-          : ''
-      }
     `;
 
+    // Keep at most 1 slim contact toast visible so 3D sidewalk stays wide open
+    const existing = this.toastLayerEl.querySelectorAll('.contact-toast:not(.bump)');
+    existing.forEach((el) => el.remove());
+
     this.toastLayerEl.appendChild(toast);
-    const allToasts = this.toastLayerEl.querySelectorAll('.contact-toast:not(.bump)');
-    if (allToasts.length > 2) {
-      allToasts[0].remove();
-    }
-    window.setTimeout(() => toast.remove(), 2600);
+    window.setTimeout(() => toast.remove(), 2000);
   }
 
   private updateHUD(): void {
@@ -955,7 +1079,32 @@ export class GameController {
   }
 
   public stepSimulation(dt: number): void {
-    if (!this.isPlaying) return;
+    if (!this.isPlaying || this.isPaused) return;
+
+    // 1. Brief READY... -> GO! launch sequence (timer held at 75.0s so player can preview card #1)
+    if (this.readyTimer > 0) {
+      this.readyTimer -= dt;
+      this.sidewalkScene.update(dt * 0.65, false, true);
+      if (this.readyTimer <= 0) {
+        this.readyTimer = 0;
+        this.showStageBanner('GO!', 'go', 520);
+        soundEngine.playReadyGo(true);
+      }
+      return;
+    }
+
+    // 2. Brief TIME UP! slow-motion outro before presenting Result Board
+    if (this.timeUpTimer > 0) {
+      this.timeUpTimer -= dt;
+      this.sidewalkScene.update(dt * 0.22, false, true);
+      if (this.timeUpTimer <= 0) {
+        this.timeUpTimer = 0;
+        this.stageBannerEl.classList.add('hidden');
+        this.finishGame();
+      }
+      return;
+    }
+
     this.elapsedSec += dt;
     this.remainingSec = Math.max(0, this.config.durationSec - this.elapsedSec);
 
@@ -993,7 +1142,15 @@ export class GameController {
     this.updateHUD();
 
     if (this.remainingSec <= 0) {
-      this.finishGame();
+      this.timeUpTimer = 0.72;
+      this.matchingUI.setEnabled(false);
+      this.keysHeld.clear();
+      this.touchSteerPointerId = null;
+      this.touchDirectTargetX = null;
+      this.buttonSteerDir = 0;
+      soundEngine.stopBgm();
+      soundEngine.playFinishFanfare();
+      this.showStageBanner('TIME UP!', 'timeup');
     }
   }
 
@@ -1003,7 +1160,9 @@ export class GameController {
     const dt = Math.min(0.08, Math.max(0.001, rawDt));
 
     if (this.isPlaying) {
-      this.stepSimulation(dt);
+      if (!this.isPaused) {
+        this.stepSimulation(dt);
+      }
     } else {
       this.sidewalkScene.update(dt, false, true);
     }
@@ -1014,9 +1173,12 @@ export class GameController {
 
   private finishGame(): void {
     this.isPlaying = false;
+    this.isPaused = false;
+    this.readyTimer = 0;
+    this.timeUpTimer = 0;
     this.matchingUI.setEnabled(false);
+    this.stageBannerEl.classList.add('hidden');
     soundEngine.stopBgm();
-    soundEngine.playFinishFanfare();
 
     const isNewBest = this.saveBestScore(this.selectedDifficulty, this.score);
     const bestScore = this.getBestScore(this.selectedDifficulty);

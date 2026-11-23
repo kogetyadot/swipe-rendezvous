@@ -12,6 +12,11 @@ export const ICONS = {
       `<path d="M7.5 5.2L19.2 12L7.5 18.8V5.2Z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>`,
       cls
     ),
+  pause: (cls = 'ui-ico') =>
+    svg(
+      `<rect x="6" y="5" width="4.2" height="14" rx="1.4" fill="currentColor"/><rect x="13.8" y="5" width="4.2" height="14" rx="1.4" fill="currentColor"/>`,
+      cls
+    ),
   heart: (cls = 'ui-ico') =>
     svg(
       `<path d="M12 20.4C12 20.4 3.5 15.1 3.5 9.2C3.5 6.4 5.7 4.2 8.4 4.2C10 4.2 11.4 5.1 12 6.3C12.6 5.1 14 4.2 15.6 4.2C18.3 4.2 20.5 6.4 20.5 9.2C20.5 15.1 12 20.4 12 20.4Z" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>`,

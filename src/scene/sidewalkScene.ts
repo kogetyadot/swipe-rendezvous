@@ -107,6 +107,10 @@ export class SidewalkScene {
   private cameraShakeIntensity = 0;
   private baseCameraPos = new THREE.Vector3(0, 4.45, 7.6);
   private cameraLookTarget = new THREE.Vector3(0, 1.0, -10.8);
+  private smoothCamX = 0;
+  private smoothLookX = 0;
+  private camFollowX = 0.36;
+  private lookFollowX = 0.22;
 
   private envSegments: THREE.Group[] = [];
   private readonly segmentLength = 12;
@@ -156,6 +160,7 @@ export class SidewalkScene {
     const height = Math.max(1, container.clientHeight || window.innerHeight);
 
     this.camera = new THREE.PerspectiveCamera(48, width / height, 0.1, 130);
+    this.updateCameraRigForAspect(width / height);
     this.camera.position.copy(this.baseCameraPos);
     this.camera.lookAt(this.cameraLookTarget);
 
@@ -459,22 +464,22 @@ export class SidewalkScene {
       roughness: 0.6,
     });
 
-    for (const sideX of [-4.22, 4.38]) {
+    for (const sideX of [-4.72, 4.82]) {
       const tree = new THREE.Group();
-      // Place trees at segment ends (z = -len*0.48) and lamps at center gap (z = 0) between the two awnings
+      // Place trees outside the playable curb edge so edge-hugging cameras never clip into tree canopies
       tree.position.set(sideX, 0, -len * 0.46);
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.2, 2.5, 8), trunkMat);
-      trunk.position.y = 1.25;
-      const crown1 = new THREE.Mesh(new THREE.DodecahedronGeometry(1.22, 1), foliageMat);
-      crown1.position.set(0, 3.15, 0);
-      const crown2 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.92, 1), foliageMat);
-      crown2.position.set(sideX > 0 ? 0.42 : -0.42, 3.72, 0.32);
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.18, 2.75, 8), trunkMat);
+      trunk.position.y = 1.38;
+      const crown1 = new THREE.Mesh(new THREE.DodecahedronGeometry(1.08, 1), foliageMat);
+      crown1.position.set(0, 3.45, 0);
+      const crown2 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.82, 1), foliageMat);
+      crown2.position.set(sideX > 0 ? 0.38 : -0.38, 3.98, 0.3);
       tree.add(trunk, crown1, crown2);
       group.add(tree);
 
-      // Glowing sunset streetlamp sitting cleanly in the gap between shop awnings
+      // Glowing sunset streetlamp sitting cleanly along the outer sidewalk edge between shop awnings
       const lamp = new THREE.Group();
-      lamp.position.set(sideX, 0, 0);
+      lamp.position.set(sideX > 0 ? 4.55 : -4.48, 0, 0);
       const pole = new THREE.Mesh(
         new THREE.CylinderGeometry(0.06, 0.08, 3.4, 8),
         new THREE.MeshStandardMaterial({ color: '#2b2d42', metalness: 0.6, roughness: 0.35 })
@@ -526,6 +531,8 @@ export class SidewalkScene {
     this.bumpKnockVx = 0;
     this.cameraShakeTime = 0;
     this.cameraShakeIntensity = 0;
+    this.smoothCamX = 0;
+    this.smoothLookX = 0;
     this.pedestrianSpawnTimer = 0.6;
 
     this.protagonist.root.position.set(0, 0, PROTAGONIST_Z);
@@ -1178,31 +1185,6 @@ export class SidewalkScene {
         this.activeMatches.splice(i, 1);
         continue;
       }
-
-      // Project 3D head/overhead position (y = 2.6) to 2D screen coordinates
-      this.projVec.set(m.x, 2.6, m.z);
-      this.projVec.project(this.camera);
-
-      const screenX = (this.projVec.x * 0.5 + 0.5) * width;
-      const screenY = (-this.projVec.y * 0.5 + 0.5) * height;
-      const progress = THREE.MathUtils.clamp(
-        (m.z - SPAWN_Z) / Math.abs(SPAWN_Z - PROTAGONIST_Z),
-        0,
-        1
-      );
-      const normalizedX = THREE.MathUtils.clamp(m.x / PLAYER_MAX_X, -1, 1);
-      const visible = !m.avoided && m.z <= PROTAGONIST_Z + 1.8 && this.projVec.z < 1.0;
-
-      hudItems.push({
-        instanceId: m.instanceId,
-        character: m.character,
-        progress,
-        normalizedX,
-        isRevealed: m.isRevealed,
-        screenX,
-        screenY,
-        visible,
-      });
     }
 
     // 5. Update 3D burst particles
@@ -1223,7 +1205,13 @@ export class SidewalkScene {
       pt.mesh.scale.setScalar(Math.max(0.01, lifeRatio));
     }
 
-    // 6. Update third-person camera tracking & shake
+    // 6. Update third-person adaptive camera tracking & shake BEFORE projecting overhead HUD badges
+    const followAlpha = 1 - Math.exp(-14 * clampedDt);
+    const targetCamX = this.playerX * this.camFollowX;
+    const targetLookX = this.playerX * this.lookFollowX;
+    this.smoothCamX += (targetCamX - this.smoothCamX) * followAlpha;
+    this.smoothLookX += (targetLookX - this.smoothLookX) * followAlpha;
+
     let shakeX = 0;
     let shakeY = 0;
     if (this.cameraShakeTime > 0) {
@@ -1233,11 +1221,40 @@ export class SidewalkScene {
     }
 
     this.camera.position.set(
-      this.playerX * 0.25 + shakeX,
+      this.smoothCamX + shakeX,
       this.baseCameraPos.y + shakeY,
       this.baseCameraPos.z
     );
-    this.camera.lookAt(this.playerX * 0.12, this.cameraLookTarget.y, this.cameraLookTarget.z);
+    this.camera.lookAt(this.smoothLookX, this.cameraLookTarget.y, this.cameraLookTarget.z);
+    this.camera.updateMatrixWorld();
+
+    // 7. Project 3D head/overhead positions (y = 2.6) to 2D screen coordinates using the fresh camera matrix
+    for (const m of this.activeMatches) {
+      if (m.contacted || m.avoided) continue;
+      this.projVec.set(m.x, 2.6, m.z);
+      this.projVec.project(this.camera);
+
+      const screenX = (this.projVec.x * 0.5 + 0.5) * width;
+      const screenY = (-this.projVec.y * 0.5 + 0.5) * height;
+      const progress = THREE.MathUtils.clamp(
+        (m.z - SPAWN_Z) / Math.abs(SPAWN_Z - PROTAGONIST_Z),
+        0,
+        1
+      );
+      const normalizedX = THREE.MathUtils.clamp(m.x / PLAYER_MAX_X, -1, 1);
+      const visible = m.z <= PROTAGONIST_Z + 1.8 && this.projVec.z < 1.0;
+
+      hudItems.push({
+        instanceId: m.instanceId,
+        character: m.character,
+        progress,
+        normalizedX,
+        isRevealed: m.isRevealed,
+        screenX,
+        screenY,
+        visible,
+      });
+    }
 
     // Sort HUD items so closer characters are ordered predictably
     hudItems.sort((a, b) => a.progress - b.progress);
@@ -1249,11 +1266,36 @@ export class SidewalkScene {
     this.cameraShakeTime = duration;
   }
 
+  /**
+   * Automatically adapts FOV, camera pullback, and lateral tracking strength to viewport aspect ratio.
+   * Ensures that even on narrow portrait split-screens (aspect ~0.31), moving the protagonist all the way
+   * to the extreme left/right sidewalk edges (±3.65m) keeps the protagonist & approaching matches clearly visible.
+   */
+  private updateCameraRigForAspect(aspect: number): void {
+    const safeAspect = Math.max(0.24, aspect);
+    const narrowT = THREE.MathUtils.clamp((1.05 - safeAspect) / 0.72, 0, 1);
+
+    this.camera.fov = THREE.MathUtils.lerp(48, 65, narrowT);
+    this.baseCameraPos.set(
+      0,
+      THREE.MathUtils.lerp(4.45, 5.85, narrowT),
+      THREE.MathUtils.lerp(7.6, 10.6, narrowT)
+    );
+    this.cameraLookTarget.set(
+      0,
+      THREE.MathUtils.lerp(1.0, 0.85, narrowT),
+      THREE.MathUtils.lerp(-10.8, -11.5, narrowT)
+    );
+    this.camFollowX = THREE.MathUtils.lerp(0.36, 0.88, narrowT);
+    this.lookFollowX = THREE.MathUtils.lerp(0.22, 0.76, narrowT);
+    this.camera.aspect = safeAspect;
+    this.camera.updateProjectionMatrix();
+  }
+
   public resize(): void {
     const width = Math.max(1, this.container.clientWidth || window.innerWidth);
     const height = Math.max(1, this.container.clientHeight || window.innerHeight);
-    this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
+    this.updateCameraRigForAspect(width / height);
     this.renderer.setSize(width, height);
   }
 

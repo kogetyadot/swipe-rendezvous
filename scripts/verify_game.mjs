@@ -268,6 +268,40 @@ async function run() {
     await mPortPage.waitForTimeout(250);
     await mPortPage.screenshot({ path: path.join(OUT_DIR, '09_mobile_portrait_play.png') });
 
+    // Test extreme left edge (-3.65) visibility on narrow portrait split-screen
+    const edgeVisibilityCheck = await mPortPage.evaluate(() => {
+      const g = window.__GAME__;
+      if (!g) return null;
+      const scene = g.sidewalkScene;
+      g.touchDirectTargetX = -3.65;
+      for (let i = 0; i < 40; i++) g.stepSimulation(0.05);
+      const leftPos = scene.protagonist.root.position.clone();
+      leftPos.y = 1.0;
+      leftPos.project(scene.camera);
+      const leftNdcX = Number(leftPos.x.toFixed(3));
+      const leftPlayerX = Number(scene.playerX.toFixed(2));
+      return { leftPlayerX, leftNdcX };
+    });
+    await mPortPage.waitForTimeout(120);
+    await mPortPage.screenshot({ path: path.join(OUT_DIR, '09c_mobile_portrait_left_edge.png') });
+
+    const rightEdgeCheck = await mPortPage.evaluate(() => {
+      const g = window.__GAME__;
+      if (!g) return null;
+      const scene = g.sidewalkScene;
+      g.touchDirectTargetX = 3.65;
+      for (let i = 0; i < 55; i++) g.stepSimulation(0.05);
+      const rightPos = scene.protagonist.root.position.clone();
+      rightPos.y = 1.0;
+      rightPos.project(scene.camera);
+      const rightNdcX = Number(rightPos.x.toFixed(3));
+      const rightPlayerX = Number(scene.playerX.toFixed(2));
+      g.touchDirectTargetX = null;
+      return { rightPlayerX, rightNdcX };
+    });
+    await mPortPage.waitForTimeout(120);
+    await mPortPage.screenshot({ path: path.join(OUT_DIR, '09d_mobile_portrait_right_edge.png') });
+
     const mobilePortCheck = await mPortPage.evaluate(() => {
       const menuBtn = document.getElementById('hud-btn-menu')?.getBoundingClientRect();
       const bgmBtn = document.getElementById('hud-btn-bgm')?.getBoundingClientRect();
@@ -277,6 +311,13 @@ async function run() {
         menuBtnRight: menuBtn ? Math.round(menuBtn.right) : -1,
       };
     });
+    mobilePortCheck.edgeVisibility = {
+      ...edgeVisibilityCheck,
+      ...rightEdgeCheck,
+      bothEdgesInsideFrame:
+        Boolean(edgeVisibilityCheck && Math.abs(edgeVisibilityCheck.leftNdcX) < 0.72) &&
+        Boolean(rightEdgeCheck && Math.abs(rightEdgeCheck.rightNdcX) < 0.72),
+    };
     await mobilePortCtx.close();
 
     console.log(

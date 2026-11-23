@@ -906,10 +906,14 @@ export class GameController {
         let drawX = item.screenX;
         let drawY = item.screenY;
 
+        const paneW = Math.max(180, this.overheadLayerEl.clientWidth || 300);
+        const edgeMargin = paneW < 260 ? Math.min(paneW * 0.42, 82) : 76;
+        drawX = Math.max(edgeMargin, Math.min(paneW - edgeMargin, drawX));
+
         for (let pass = 0; pass < 4; pass++) {
           let collided = false;
           for (const box of placedBoxes) {
-            if (Math.abs(drawX - box.x) < 122 && Math.abs(drawY - box.y) < 38) {
+            if (Math.abs(drawX - box.x) < 118 && Math.abs(drawY - box.y) < 38) {
               drawY = box.y - 39;
               drawX += drawX >= box.x ? 10 : -10;
               collided = true;
@@ -917,6 +921,7 @@ export class GameController {
           }
           if (!collided) break;
         }
+        drawX = Math.max(edgeMargin, Math.min(paneW - edgeMargin, drawX));
         drawY = Math.max(44, drawY);
         placedBoxes.push({ x: drawX, y: drawY });
 

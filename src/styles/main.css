@@ -3078,8 +3078,12 @@ button {
   }
 
   .steer-edge-btn {
-    padding: 5px 6px;
+    padding: 5px 7px;
     font-size: 0.64rem;
+  }
+
+  .steer-edge-btn span {
+    display: none;
   }
 
   .steer-track-label {

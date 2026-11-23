@@ -49,6 +49,10 @@ export type RevealPropType =
   | 'art_price_tag'
   | 'wire_transfer_alert'
   | 'qr_board'
+  | 'car_key_wave'
+  | 'forced_arrow'
+  | 'sidejob_banner'
+  | 'catalog_burst'
   | 'none';
 
 export type BehaviorArchetype =

@@ -742,6 +742,85 @@ function buildRevealProp(propType: RevealPropType, appearance: VisualAppearance)
       group.add(board);
       break;
     }
+    case 'car_key_wave': {
+      // Giant comical car key fob & flashing unlock waves
+      const fob = new THREE.Mesh(
+        new THREE.BoxGeometry(0.42, 0.62, 0.14),
+        makeToonMaterial('#1f2233', 0.25, 0.5)
+      );
+      fob.position.set(0.32, 1.55, 0.45);
+      fob.rotation.z = -0.25;
+      const keyBlade = new THREE.Mesh(
+        new THREE.BoxGeometry(0.12, 0.48, 0.05),
+        makeToonMaterial('#dfe6f0', 0.18, 0.85)
+      );
+      keyBlade.position.set(0.44, 2.02, 0.45);
+      keyBlade.rotation.z = -0.25;
+      const btnRed = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.08, 0.06, 12),
+        makeToonMaterial('#ff3b5c', 0.2, 0.2, '#ff3b5c', 0.6)
+      );
+      btnRed.rotation.x = Math.PI / 2;
+      btnRed.position.set(0.32, 1.62, 0.53);
+      const tex = createLabelTexture('car_key', '#1f2233', '#ffae19', '車乗って!', '今すぐドライブ', '#ffda44');
+      const board = createSignPanel(0.92, 0.48, tex, '#ffae19');
+      board.position.set(-0.18, 2.15, 0.36);
+      group.add(fob, keyBlade, btnRed, board);
+      break;
+    }
+    case 'forced_arrow': {
+      // Giant red 3D forced direction arrow sign blocking path
+      const shaft = new THREE.Mesh(
+        new THREE.BoxGeometry(0.95, 0.24, 0.1),
+        makeToonMaterial('#ff2a55', 0.3, 0.15, '#ff2a55', 0.4)
+      );
+      shaft.position.set(-0.1, 1.72, 0.52);
+      const head = new THREE.Mesh(
+        new THREE.ConeGeometry(0.32, 0.48, 4),
+        makeToonMaterial('#ff2a55', 0.3, 0.15, '#ff2a55', 0.45)
+      );
+      head.rotation.z = -Math.PI / 2;
+      head.position.set(0.56, 1.72, 0.52);
+      const tex = createLabelTexture('forced_arrow', '#ffe4ea', '#ff2a55', '強制案内!', 'こっちの店へ', '#c9184a');
+      const board = createSignPanel(0.96, 0.48, tex, '#ff2a55');
+      board.position.set(0.0, 2.22, 0.42);
+      group.add(shaft, head, board);
+      break;
+    }
+    case 'sidejob_banner': {
+      // Wide flashy "月収UP! 副業講座" glowing banner
+      const tex = createLabelTexture('sidejob_banner', '#fff6c9', '#ff007f', '月収UP講座!', 'スマホで簡単副業', '#b8005a');
+      const board = createSignPanel(1.38, 0.72, tex, '#ff007f');
+      board.position.set(0, 1.74, 0.52);
+      const poleL = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.035, 0.035, 1.5, 8),
+        makeToonMaterial('#ffd700', 0.2, 0.7)
+      );
+      poleL.position.set(-0.62, 1.28, 0.5);
+      const poleR = poleL.clone();
+      poleR.position.x = 0.62;
+      group.add(board, poleL, poleR);
+      break;
+    }
+    case 'catalog_burst': {
+      // Fan of 5 glossy luxury product catalogs bursting outward
+      const colors = ['#ff4778', '#ffd166', '#4cc9f0', '#9d4edd', '#2ce69b'];
+      for (let i = -2; i <= 2; i++) {
+        const tex = createLabelTexture(
+          `cat_${i}`,
+          '#ffffff',
+          colors[i + 2],
+          i === 0 ? '高級商材' : '購入枠',
+          i === 0 ? '今だけ50万' : 'CATALOG',
+          '#1e1b2e'
+        );
+        const card = createSignPanel(0.46, 0.62, tex, colors[i + 2]);
+        card.position.set(i * 0.24, 1.58 + (2 - Math.abs(i)) * 0.1, 0.5 + Math.abs(i) * 0.04);
+        card.rotation.z = -i * 0.26;
+        group.add(card);
+      }
+      break;
+    }
     case 'none':
     default:
       break;
